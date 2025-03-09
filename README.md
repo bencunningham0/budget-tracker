@@ -72,6 +72,7 @@ DATABASE_URL=your-database-url  # For PostgreSQL in production
 
 ## Deployment on Vercel
 
+### Option 1: Using Vercel CLI
 1. Install Vercel CLI
 ```bash
 npm i -g vercel
@@ -87,6 +88,18 @@ python manage.py collectstatic
 ```bash
 vercel
 ```
+
+### Option 2: Using Vercel Web Interface
+1. Import your repository in the Vercel dashboard
+2. Configure the build settings:
+   - Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
+   - Output Directory: `staticfiles`
+   - Install Command: `pip install -r requirements.txt`
+3. Add the following environment variables in your Vercel project settings:
+   - `DEBUG`: `False`
+   - `SECRET_KEY`: [your-secret-key]
+   - `ALLOWED_HOSTS`: [your-vercel-domain]
+   - `DATABASE_URL`: [your-database-url]
 
 ## Contributing
 

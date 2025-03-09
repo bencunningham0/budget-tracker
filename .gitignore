@@ -55,3 +55,4 @@ htmlcov/
 # Production
 *.env.prod
 *.env.production
+.vercel
