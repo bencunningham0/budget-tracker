@@ -1,0 +1,229 @@
+{% extends 'budgetapp/base.html' %}
+{% load budget_filters %}
+
+{% block title %}{{ income.source }} Details{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active">{{ income.source }}</li>
+            </ol>
+        </nav>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">{{ income.source }}</h5>
+            </div>
+            <div class="card-body">
+                <h6>Expected Income: ${{ expected_income|floatformat:2|intcomma }} ({{ income.get_frequency_display }})</h6>
+                
+                {% if income.is_variable %}
+                    <h6>Current Period Income: ${{ current_period_income|floatformat:2|intcomma }}</h6>
+                    <h6>
+                        Difference: 
+                        {% if difference > 0 %}
+                            <span class="text-success">+${{ difference|floatformat:2|intcomma }}</span>
+                        {% elif difference < 0 %}
+                            <span class="text-danger">-${{ difference|abs|floatformat:2|intcomma }}</span>
+                        {% else %}
+                            <span class="text-muted">$0.00</span>
+                        {% endif %}
+                    </h6>
+                    
+                    <div class="alert alert-info mt-3">
+                        <p class="mb-0"><strong>Weekly Average (30 days):</strong> ${{ avg_30d|floatformat:2|intcomma }}</p>
+                        <p class="mb-0"><strong>Weekly Average (90 days):</strong> ${{ avg_90d|floatformat:2|intcomma }}</p>
+                    </div>
+                    
+                    <span class="badge bg-warning">Variable Income</span>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <a href="{% url 'income_edit' income.id %}" class="btn btn-outline-primary">Edit Income</a>
+                    <a href="{% url 'income_delete' income.id %}" class="btn btn-outline-danger">Delete Income</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Income Summary</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Total Income Received
+                        <span class="badge bg-primary rounded-pill">${{ total_income|floatformat:2|intcomma }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Number of Transactions
+                        <span class="badge bg-primary rounded-pill">{{ transaction_count }}</span>
+                    </li>
+                    {% if transaction_count > 0 %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Average Transaction
+                        <span class="badge bg-primary rounded-pill">${{ total_income|div:transaction_count|floatformat:2|intcomma }}</span>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{% url 'income_transaction_create_for_income' income.id %}" class="btn btn-success">Record Income Payment</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">Income Transaction History</h5>
+                <a href="{% url 'income_transaction_create_for_income' income.id %}" class="btn btn-light btn-sm">Record Payment</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th class="text-end">Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in income_transactions %}
+                            <tr>
+                                <td>{{ transaction.date|date:"M d, Y" }}</td>
+                                <td>{{ transaction.description }}</td>
+                                <td class="text-end">${{ transaction.amount|floatformat:2|intcomma }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'income_transaction_edit' transaction.id %}" class="btn btn-outline-secondary">Edit</a>
+                                        <a href="{% url 'income_transaction_delete' transaction.id %}" class="btn btn-outline-danger">Delete</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">No income transactions recorded yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Income Trend Chart -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">Income Trends</h5>
+            </div>
+            <div class="card-body">
+                <!-- Income Trend Graph -->
+                <div style="position: relative; height: 300px; max-height: 300px;">
+                    <canvas id="incomeChart"></canvas>
+                </div>
+                <div class="text-center text-muted small mt-2">
+                    Monthly income trends over time
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Include Chart.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Exit early if no chart container or no transactions
+    if (!document.getElementById('incomeChart') || 
+        {% if income_transactions %}false{% else %}true{% endif %}) {
+        return;
+    }
+    
+    // Group income transactions by month
+    const transactions = [
+        {% for transaction in income_transactions %}
+            {
+                date: new Date("{{ transaction.date|date:'Y-m-d' }}"),
+                amount: {{ transaction.amount }}
+            }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Group by month and year
+    const monthlyData = {};
+    transactions.forEach(transaction => {
+        const year = transaction.date.getFullYear();
+        const month = transaction.date.getMonth();
+        const key = `${year}-${month.toString().padStart(2, '0')}`;
+        
+        if (!monthlyData[key]) {
+            monthlyData[key] = {
+                label: new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
+                amount: 0,
+                date: new Date(year, month, 1)
+            };
+        }
+        
+        monthlyData[key].amount += transaction.amount;
+    });
+    
+    // Convert to array and sort chronologically
+    const monthlyArray = Object.values(monthlyData).sort((a, b) => a.date - b.date);
+    
+    // Only show the last 12 months if there are more than 12 data points
+    const limitedData = monthlyArray.slice(-12);
+    
+    // Create the chart
+    const ctx = document.getElementById('incomeChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: limitedData.map(d => d.label),
+            datasets: [{
+                label: 'Income',
+                data: limitedData.map(d => d.amount),
+                backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Income: $' + context.raw.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

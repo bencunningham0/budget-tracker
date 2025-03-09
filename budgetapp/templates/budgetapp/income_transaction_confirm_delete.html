@@ -1,0 +1,39 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}Delete Income Transaction{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">Delete Income Transaction</h4>
+            </div>
+            <div class="card-body">
+                <p class="fw-bold">Are you sure you want to delete this income transaction?</p>
+                
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ income_transaction.description }}</h5>
+                        <p class="card-text">
+                            <strong>Income Source:</strong> {{ income_transaction.income.source }}<br>
+                            <strong>Amount:</strong> ${{ income_transaction.amount|floatformat:2 }}<br>
+                            <strong>Date:</strong> {{ income_transaction.date|date:"M d, Y" }}
+                        </p>
+                    </div>
+                </div>
+                
+                <p class="text-danger">This action cannot be undone.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete Transaction</button>
+                        <a href="{% url 'income_transaction_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -9,17 +9,23 @@
         <h2>Budget Dashboard</h2>
     </div>
     <div class="col-auto">
-        <a href="{% url 'transaction_create' %}" class="btn btn-primary">
-            <i class="bi bi-plus"></i> Add Transaction
-        </a>
+        <div class="btn-group">
+            <a href="{% url 'transaction_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus"></i> Add Expense
+            </a>
+            <a href="{% url 'income_transaction_create' %}" class="btn btn-success">
+                <i class="bi bi-plus"></i> Record Income
+            </a>
+        </div>
     </div>
 </div>
 
 <div class="row mb-4">
     <div class="col-lg-6">
         <div class="card shadow-sm h-100">
-            <div class="card-header bg-primary text-white">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">Income Summary</h5>
+                <a href="{% url 'income_transaction_list' %}" class="btn btn-light btn-sm">View All</a>
             </div>
             <div class="card-body">
                 <div class="row g-3 mb-4">
@@ -47,10 +53,14 @@
                 <ul class="list-group">
                     {% for income in incomes %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ income.source }} 
+                        <a href="{% url 'income_detail' income.id %}" class="text-decoration-none text-dark">{{ income.source }}</a>
                         <div>
                             <span class="badge bg-primary rounded-pill">${{ income.amount|floatformat:2 }} ({{ income.get_frequency_display }})</span>
-                            <a href="{% url 'income_edit' income.id %}" class="btn btn-sm btn-outline-secondary ms-2">Edit</a>
+                            {% if income.is_variable %}
+                            <span class="badge bg-warning">Variable</span>
+                            <a href="{% url 'income_transaction_create_for_income' income.id %}" class="btn btn-sm btn-outline-success ms-1">Record</a>
+                            {% endif %}
+                            <a href="{% url 'income_edit' income.id %}" class="btn btn-sm btn-outline-secondary ms-1">Edit</a>
                             <a href="{% url 'income_delete' income.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
                         </div>
                     </li>
@@ -116,6 +126,68 @@
         </div>
     </div>
 </div>
+
+{% if has_variable_income %}
+<!-- Variable Income Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-warning">
+                <h5 class="card-title mb-0">Variable Income Status</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">This section shows your variable income sources and helps track actual vs expected amounts.</p>
+                
+                <div class="row">
+                    {% for income_data in variable_income_data %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h6 class="card-title mb-0">{{ income_data.income.source }}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Expected:</span>
+                                    <span>${{ income_data.expected_amount|floatformat:2 }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>Actual (Current Period):</span>
+                                    <span>${{ income_data.actual_period_amount|floatformat:2 }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-3">
+                                    <span>Difference:</span>
+                                    <span class="{% if income_data.difference > 0 %}text-success{% elif income_data.difference < 0 %}text-danger{% endif %}">
+                                        {% if income_data.difference > 0 %}+{% endif %}
+                                        ${{ income_data.difference|floatformat:2 }}
+                                    </span>
+                                </div>
+                                
+                                {% if income_data.recent_transactions %}
+                                <h6 class="border-top pt-2 mb-2">Recent Payments:</h6>
+                                <ul class="list-group list-group-flush small">
+                                    {% for transaction in income_data.recent_transactions %}
+                                    <li class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                        <span>{{ transaction.date|date:"M d" }}: {{ transaction.description|truncatechars:20 }}</span>
+                                        <span>${{ transaction.amount|floatformat:2 }}</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                                
+                                <div class="text-center mt-3">
+                                    <a href="{% url 'income_transaction_create_for_income' income_data.income.id %}" class="btn btn-sm btn-success">Record Payment</a>
+                                    <a href="{% url 'income_detail' income_data.income.id %}" class="btn btn-sm btn-outline-primary">Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h3>Your Budgets</h3>
@@ -184,44 +256,106 @@
 <div class="row mt-5">
     <div class="col-12">
         <h3>Recent Transactions</h3>
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Budget</th>
-                                <th>Description</th>
-                                <th class="text-end">Amount</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for transaction in recent_transactions %}
-                            <tr>
-                                <td>{{ transaction.date|date:"M d, Y" }}</td>
-                                <td>
-                                    <a href="{% url 'budget_detail' transaction.budget.id %}">
-                                        {{ transaction.budget.category }}
-                                    </a>
-                                </td>
-                                <td>{{ transaction.description }}</td>
-                                <td class="text-end">${{ transaction.amount|floatformat:2 }}</td>
-                                <td>
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="{% url 'transaction_edit' transaction.id %}" class="btn btn-outline-secondary">Edit</a>
-                                        <a href="{% url 'transaction_delete' transaction.id %}" class="btn btn-outline-danger">Delete</a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center">No transactions recorded yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        
+        <ul class="nav nav-tabs mb-3" id="transactionTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="expenses-tab" data-bs-toggle="tab" data-bs-target="#expenses" type="button" role="tab">
+                    Expenses
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="income-tab" data-bs-toggle="tab" data-bs-target="#income" type="button" role="tab">
+                    Income
+                </button>
+            </li>
+        </ul>
+        
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="expenses" role="tabpanel">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Budget</th>
+                                        <th>Description</th>
+                                        <th class="text-end">Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for transaction in recent_transactions %}
+                                    <tr>
+                                        <td>{{ transaction.date|date:"M d, Y" }}</td>
+                                        <td>
+                                            <a href="{% url 'budget_detail' transaction.budget.id %}">
+                                                {{ transaction.budget.category }}
+                                            </a>
+                                        </td>
+                                        <td>{{ transaction.description }}</td>
+                                        <td class="text-end">${{ transaction.amount|floatformat:2 }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'transaction_edit' transaction.id %}" class="btn btn-outline-secondary">Edit</a>
+                                                <a href="{% url 'transaction_delete' transaction.id %}" class="btn btn-outline-danger">Delete</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center">No transactions recorded yet.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="income" role="tabpanel">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Source</th>
+                                        <th>Description</th>
+                                        <th class="text-end">Amount</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for transaction in recent_income_transactions %}
+                                    <tr>
+                                        <td>{{ transaction.date|date:"M d, Y" }}</td>
+                                        <td>
+                                            <a href="{% url 'income_detail' transaction.income.id %}">
+                                                {{ transaction.income.source }}
+                                            </a>
+                                        </td>
+                                        <td>{{ transaction.description }}</td>
+                                        <td class="text-end">${{ transaction.amount|floatformat:2 }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'income_transaction_edit' transaction.id %}" class="btn btn-outline-secondary">Edit</a>
+                                                <a href="{% url 'income_transaction_delete' transaction.id %}" class="btn btn-outline-danger">Delete</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center">No income transactions recorded yet.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

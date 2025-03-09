@@ -21,6 +21,14 @@ def mul(value, arg):
         return Decimal('0')
 
 @register.filter
+def abs(value):
+    """Return the absolute value"""
+    try:
+        return abs(Decimal(value))
+    except ValueError:
+        return Decimal('0')
+
+@register.filter
 def intcomma(value):
     """Adds commas to an integer or decimal number for thousand separators"""
     try:

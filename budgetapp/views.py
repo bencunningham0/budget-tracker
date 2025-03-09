@@ -5,8 +5,11 @@ from django.contrib import messages
 from django.db.models import Sum
 from django.utils import timezone
 from decimal import Decimal
-from .forms import UserRegistrationForm, BudgetForm, IncomeForm, TransactionForm, RecurringTransactionForm
-from .models import Budget, Income, Transaction, RecurringTransaction
+from .forms import (
+    UserRegistrationForm, BudgetForm, IncomeForm, TransactionForm, 
+    RecurringTransactionForm, IncomeTransactionForm
+)
+from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction
 
 def register(request):
     if request.method == 'POST':
@@ -50,10 +53,29 @@ def dashboard(request):
         remaining_budget += period_info['balance']
         total_spent += period_info['total_spent']
     
-    # Calculate total income and weekly averages
+    # Calculate total income and weekly averages - updated to handle variable income
     total_weekly_income = sum(income.get_weekly_amount() for income in incomes)
     total_monthly_income = total_weekly_income * Decimal('52') / Decimal('12')
     total_yearly_income = total_weekly_income * Decimal('52')
+    
+    # Get variable income data
+    variable_incomes = [income for income in incomes if income.is_variable]
+    variable_income_data = []
+    
+    for income in variable_incomes:
+        recent_period = timezone.now() - timezone.timedelta(days=30)
+        income_transactions = IncomeTransaction.objects.filter(
+            income=income,
+            date__gte=recent_period
+        ).order_by('-date')
+        
+        variable_income_data.append({
+            'income': income,
+            'recent_transactions': income_transactions[:5],  # Latest 5 transactions
+            'actual_period_amount': income.get_current_period_actual_income(),
+            'expected_amount': income.amount,
+            'difference': income.get_current_period_actual_income() - income.amount
+        })
     
     # Calculate weekly budgets and spending
     weekly_budgeted = sum(budget.get_weekly_amount() for budget in budgets)
@@ -68,7 +90,12 @@ def dashboard(request):
         user=user
     ).order_by('-date')[:10]
     
-    # Get recurring transactions - Fixed order_by to use start_date instead of next_date
+    # Get recent income transactions
+    recent_income_transactions = IncomeTransaction.objects.filter(
+        user=user
+    ).order_by('-date')[:5]
+    
+    # Get recurring transactions
     recurring_transactions = RecurringTransaction.objects.filter(
         user=user,
         active=True
@@ -88,6 +115,9 @@ def dashboard(request):
         'recent_transactions': recent_transactions,
         'incomes': incomes,
         'recurring_transactions': recurring_transactions,
+        'variable_income_data': variable_income_data,
+        'recent_income_transactions': recent_income_transactions,
+        'has_variable_income': any(income.is_variable for income in incomes),
     }
     
     return render(request, 'budgetapp/dashboard.html', context)
@@ -161,8 +191,20 @@ def income_create(request):
         if form.is_valid():
             income = form.save(commit=False)
             income.user = request.user
+            
+            # Auto-set frequency to 'variable' if is_variable is True
+            if income.is_variable and income.frequency != 'variable':
+                income.frequency = 'variable'
+                
             income.save()
+            
             messages.success(request, "Income added successfully!")
+            
+            # Redirect to add income transaction if variable income
+            if income.is_variable:
+                messages.info(request, "Since this is variable income, you may want to record your first payment.")
+                return redirect('income_transaction_create_for_income', income_pk=income.id)
+                
             return redirect('dashboard')
     else:
         form = IncomeForm()
@@ -176,7 +218,13 @@ def income_edit(request, pk):
     if request.method == 'POST':
         form = IncomeForm(request.POST, instance=income)
         if form.is_valid():
-            form.save()
+            income = form.save(commit=False)
+            
+            # Auto-set frequency to 'variable' if is_variable is True
+            if income.is_variable and income.frequency != 'variable':
+                income.frequency = 'variable'
+                
+            income.save()
             messages.success(request, "Income updated successfully!")
             return redirect('dashboard')
     else:
@@ -329,3 +377,123 @@ def process_recurring_transactions(user):
     
     for recurring_transaction in recurring_transactions:
         recurring_transaction.generate_transactions()
+
+@login_required
+def income_transaction_create(request):
+    if request.method == 'POST':
+        form = IncomeTransactionForm(request.user, request.POST)
+        if form.is_valid():
+            income_transaction = form.save(commit=False)
+            income_transaction.user = request.user
+            income_transaction.save()
+            messages.success(request, "Income transaction recorded successfully!")
+            return redirect('income_transaction_list')
+    else:
+        form = IncomeTransactionForm(request.user)
+    
+    return render(request, 'budgetapp/income_transaction_form.html', {'form': form})
+
+@login_required
+def income_transaction_edit(request, pk):
+    income_transaction = get_object_or_404(IncomeTransaction, pk=pk, user=request.user)
+    
+    if request.method == 'POST':
+        form = IncomeTransactionForm(request.user, request.POST, instance=income_transaction)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Income transaction updated successfully!")
+            return redirect('income_transaction_list')
+    else:
+        form = IncomeTransactionForm(request.user, instance=income_transaction)
+    
+    return render(request, 'budgetapp/income_transaction_form.html', {'form': form, 'action': 'Edit'})
+
+@login_required
+def income_transaction_delete(request, pk):
+    income_transaction = get_object_or_404(IncomeTransaction, pk=pk, user=request.user)
+    income_id = income_transaction.income.id
+    
+    if request.method == 'POST':
+        income_transaction.delete()
+        messages.success(request, "Income transaction deleted successfully!")
+        return redirect('income_transaction_list')
+        
+    return render(request, 'budgetapp/income_transaction_confirm_delete.html', {'income_transaction': income_transaction})
+
+@login_required
+def income_transaction_create_for_income(request, income_pk):
+    income = get_object_or_404(Income, pk=income_pk, user=request.user)
+    
+    if request.method == 'POST':
+        form = IncomeTransactionForm(request.user, request.POST)
+        if form.is_valid():
+            income_transaction = form.save(commit=False)
+            income_transaction.user = request.user
+            income_transaction.save()
+            messages.success(request, "Income transaction recorded successfully!")
+            return redirect('income_detail', pk=income.id)
+    else:
+        form = IncomeTransactionForm(request.user, initial={'income': income})
+    
+    return render(request, 'budgetapp/income_transaction_form.html', {'form': form, 'income': income})
+
+@login_required
+def income_transaction_list(request):
+    income_transactions = IncomeTransaction.objects.filter(
+        user=request.user
+    ).order_by('-date')
+    
+    # Group by income source
+    incomes = Income.objects.filter(user=request.user).order_by('source')
+    income_data = []
+    
+    for income in incomes:
+        transactions = income_transactions.filter(income=income)
+        if transactions:
+            income_data.append({
+                'income': income,
+                'transactions': transactions,
+                'total': sum(t.amount for t in transactions),
+                'avg_per_period': income.get_weekly_amount() * 4 if income.frequency != 'variable' else None
+            })
+    
+    context = {
+        'income_data': income_data,
+        'all_transactions': income_transactions
+    }
+    
+    return render(request, 'budgetapp/income_transaction_list.html', context)
+
+@login_required
+def income_detail(request, pk):
+    income = get_object_or_404(Income, pk=pk, user=request.user)
+    income_transactions = IncomeTransaction.objects.filter(income=income).order_by('-date')
+    
+    # Calculate stats for this income source
+    current_period_income = income.get_current_period_actual_income()
+    expected_income = income.amount
+    difference = current_period_income - expected_income if income.is_variable else 0
+    
+    # Calculate averages
+    last_30_days = timezone.now() - timezone.timedelta(days=30)
+    last_90_days = timezone.now() - timezone.timedelta(days=90)
+    
+    transactions_30d = income_transactions.filter(date__gte=last_30_days)
+    transactions_90d = income_transactions.filter(date__gte=last_90_days)
+    
+    avg_30d = sum(t.amount for t in transactions_30d) / 30 * 7 if transactions_30d else 0  # Weekly average
+    avg_90d = sum(t.amount for t in transactions_90d) / 90 * 7 if transactions_90d else 0  # Weekly average
+    
+    context = {
+        'income': income,
+        'income_transactions': income_transactions[:20],  # Limit to 20 most recent
+        'current_period_income': current_period_income,
+        'expected_income': expected_income,
+        'difference': difference,
+        'avg_30d': avg_30d,
+        'avg_90d': avg_90d,
+        'total_income': sum(t.amount for t in income_transactions),
+        'transaction_count': income_transactions.count()
+    }
+    
+    return render(request, 'budgetapp/income_detail.html', context)

@@ -36,6 +36,7 @@
                             <span class="input-group-text">$</span>
                             <input type="number" name="amount" class="form-control" id="id_amount" value="{{ form.amount.value|default:'' }}" step="0.01" min="0" required>
                         </div>
+                        <div class="form-text">For variable income, this is your expected or average amount</div>
                     </div>
                     
                     <div class="mb-3">
@@ -46,8 +47,15 @@
                             <option value="fortnightly" {% if form.frequency.value == 'fortnightly' %}selected{% endif %}>Fortnightly</option>
                             <option value="monthly" {% if form.frequency.value == 'monthly' %}selected{% endif %}>Monthly</option>
                             <option value="yearly" {% if form.frequency.value == 'yearly' %}selected{% endif %}>Yearly</option>
+                            <option value="variable" {% if form.frequency.value == 'variable' %}selected{% endif %}>Variable</option>
                         </select>
                         <div class="form-text">How often you receive this income</div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="id_is_variable" name="is_variable" {% if form.is_variable.value %}checked{% endif %}>
+                        <label class="form-check-label" for="id_is_variable">Variable Income</label>
+                        <div class="form-text">{{ form.is_variable.help_text }}</div>
                     </div>
                     
                     <div class="d-grid gap-2">
@@ -59,4 +67,27 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const variableCheckbox = document.getElementById('id_is_variable');
+        const frequencySelect = document.getElementById('id_frequency');
+        
+        // When variable checkbox changes, update frequency dropdown 
+        variableCheckbox.addEventListener('change', function() {
+            if(this.checked) {
+                frequencySelect.value = 'variable';
+            }
+        });
+        
+        // When frequency is set to variable, check the variable checkbox
+        frequencySelect.addEventListener('change', function() {
+            if(this.value === 'variable') {
+                variableCheckbox.checked = true;
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -16,8 +16,16 @@ urlpatterns = [
     
     # Income URLs
     path('income/create/', views.income_create, name='income_create'),
+    path('income/<int:pk>/', views.income_detail, name='income_detail'),
     path('income/<int:pk>/edit/', views.income_edit, name='income_edit'),
     path('income/<int:pk>/delete/', views.income_delete, name='income_delete'),
+    
+    # Income Transaction URLs
+    path('income-transactions/', views.income_transaction_list, name='income_transaction_list'),
+    path('income-transaction/create/', views.income_transaction_create, name='income_transaction_create'),
+    path('income-transaction/<int:pk>/edit/', views.income_transaction_edit, name='income_transaction_edit'),
+    path('income-transaction/<int:pk>/delete/', views.income_transaction_delete, name='income_transaction_delete'),
+    path('income/<int:income_pk>/transaction/create/', views.income_transaction_create_for_income, name='income_transaction_create_for_income'),
     
     # Transaction URLs
     path('transaction/create/', views.transaction_create, name='transaction_create'),

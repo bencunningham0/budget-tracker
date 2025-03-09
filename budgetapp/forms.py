@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Budget, Income, Transaction, RecurringTransaction
+from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction
 
 class UserRegistrationForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -33,10 +33,33 @@ class BudgetForm(forms.ModelForm):
 class IncomeForm(forms.ModelForm):
     class Meta:
         model = Income
-        fields = ['source', 'amount', 'frequency']
+        fields = ['source', 'amount', 'frequency', 'is_variable']
         widgets = {
             'amount': forms.NumberInput(attrs={'step': '0.01'}),
         }
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['is_variable'].label = "Variable Income"
+        self.fields['is_variable'].help_text = "Check this if your income amount varies from period to period"
+
+class IncomeTransactionForm(forms.ModelForm):
+    class Meta:
+        model = IncomeTransaction
+        fields = ['income', 'amount', 'description', 'date']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'amount': forms.NumberInput(attrs={'step': '0.01'}),
+        }
+    
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['income'].queryset = Income.objects.filter(user=user)
+            
+        # Set default description if not provided
+        if not self.initial.get('description'):
+            self.initial['description'] = 'Income payment'
 
 class TransactionForm(forms.ModelForm):
     class Meta:

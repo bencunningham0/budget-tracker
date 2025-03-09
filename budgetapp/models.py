@@ -261,6 +261,7 @@ class Income(models.Model):
         ('fortnightly', 'Fortnightly'),
         ('monthly', 'Monthly'),
         ('yearly', 'Yearly'),
+        ('variable', 'Variable'),  # Add variable option for irregular income
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incomes')
@@ -269,12 +270,24 @@ class Income(models.Model):
     frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_variable = models.BooleanField(default=False, help_text="Whether this income source varies from period to period")
     
     def __str__(self):
         return f"{self.source} - {self.amount} ({self.get_frequency_display()})"
     
     def get_weekly_amount(self):
-        if self.frequency == 'weekly':
+        if self.frequency == 'variable':
+            # For variable income, get average weekly income from recent transactions
+            recent_period = timezone.now() - timedelta(days=60)  # Last 60 days
+            income_transactions = self.income_transactions.filter(date__gte=recent_period)
+            
+            if income_transactions.exists():
+                total_income = sum(t.amount for t in income_transactions)
+                weeks = Decimal('8.57')  # Approximately 60/7 weeks
+                return total_income / weeks
+            # Fall back to the expected amount if no transactions yet
+            return self.amount
+        elif self.frequency == 'weekly':
             return self.amount
         elif self.frequency == 'fortnightly':
             return self.amount / Decimal('2')
@@ -282,6 +295,69 @@ class Income(models.Model):
             return self.amount * Decimal('12') / Decimal('52')
         else:  # yearly
             return self.amount / Decimal('52')
+
+    def get_current_period_actual_income(self):
+        """Get actual income for current budget period"""
+        if not self.is_variable:
+            return self.amount
+            
+        # Determine period dates based on frequency
+        today = timezone.now().date()
+        if self.frequency == 'weekly':
+            # Start of week (Monday)
+            period_start = today - timedelta(days=today.weekday())
+            period_end = period_start + timedelta(days=6)
+        elif self.frequency == 'fortnightly':
+            # Start of week
+            period_start = today - timedelta(days=today.weekday())
+            # Determine if this is week 1 or 2 of the fortnight
+            # (Simple approach - could be made more sophisticated)
+            if (period_start.isocalendar()[1] % 2) == 0:
+                period_start -= timedelta(days=7)
+            period_end = period_start + timedelta(days=13)
+        elif self.frequency == 'monthly':
+            # Start of month
+            period_start = today.replace(day=1)
+            # End of month
+            if today.month == 12:
+                period_end = date(today.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                period_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
+        else:  # yearly or variable
+            # Start of year
+            period_start = today.replace(month=1, day=1)
+            period_end = today.replace(month=12, day=31)
+            
+        # Get transactions in this period
+        income_in_period = self.income_transactions.filter(
+            date__gte=timezone.make_aware(datetime.combine(period_start, datetime.min.time())),
+            date__lte=timezone.make_aware(datetime.combine(period_end, datetime.min.time()))
+        )
+        
+        # Return the sum of actual income
+        if income_in_period.exists():
+            return sum(t.amount for t in income_in_period)
+        return Decimal('0')
+
+class IncomeTransaction(models.Model):
+    """Model for tracking actual income received"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='income_transactions')
+    income = models.ForeignKey(Income, on_delete=models.CASCADE, related_name='income_transactions')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.CharField(max_length=255)
+    date = models.DateTimeField(default=timezone.now)
+    
+    def __str__(self):
+        return f"{self.description} - ${self.amount} ({self.date.date()})"
+    
+    def save(self, *args, **kwargs):
+        # If date is being set for the first time, use start of day
+        if self.date:
+            # Convert to date and back to datetime to get midnight
+            self.date = timezone.make_aware(
+                datetime.combine(self.date.date(), datetime.min.time())
+            )
+        super().save(*args, **kwargs)
 
 class Transaction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transactions')
