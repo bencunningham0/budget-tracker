@@ -1,0 +1,103 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}{{ action }} Recurring Transaction{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="card-title mb-0">{{ action }} Recurring Transaction</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <p>Please correct the errors below:</p>
+                        {% for field in form %}
+                            {% if field.errors %}
+                                <p>{{ field.label }}: {{ field.errors|striptags }}</p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_budget" class="form-label">Budget Category</label>
+                        <select name="budget" class="form-select" id="id_budget" required>
+                            <option value="" {% if not form.budget.value %}selected{% endif %}>Select budget category</option>
+                            {% for budget in form.fields.budget.queryset %}
+                                <option value="{{ budget.id }}" {% if form.budget.value == budget.id %}selected{% endif %}>
+                                    {{ budget.category }} (Balance: ${{ budget.get_current_balance|floatformat:2 }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_description" class="form-label">Description</label>
+                        <input type="text" name="description" class="form-control" id="id_description" value="{{ form.description.value|default:'' }}" required>
+                        <div class="form-text">Description of this recurring expense</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_amount" class="form-label">Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="amount" class="form-control" id="id_amount" value="{{ form.amount.value|default:'' }}" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_frequency" class="form-label">Frequency</label>
+                        <select name="frequency" class="form-select" id="id_frequency" required>
+                            <option value="" {% if not form.frequency.value %}selected{% endif %}>Select frequency</option>
+                            <option value="daily" {% if form.frequency.value == 'daily' %}selected{% endif %}>Daily</option>
+                            <option value="weekly" {% if form.frequency.value == 'weekly' %}selected{% endif %}>Weekly</option>
+                            <option value="fortnightly" {% if form.frequency.value == 'fortnightly' %}selected{% endif %}>Fortnightly</option>
+                            <option value="monthly" {% if form.frequency.value == 'monthly' %}selected{% endif %}>Monthly</option>
+                            <option value="yearly" {% if form.frequency.value == 'yearly' %}selected{% endif %}>Yearly</option>
+                        </select>
+                        <div class="form-text">How often this transaction repeats</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_start_date" class="form-label">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" id="id_start_date" value="{{ form.start_date.value|date:'Y-m-d'|default:'' }}" required>
+                        <div class="form-text">When to start generating these transactions</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_end_date" class="form-label">End Date (Optional)</label>
+                        <input type="date" name="end_date" class="form-control" id="id_end_date" value="{{ form.end_date.value|date:'Y-m-d'|default:'' }}">
+                        <div class="form-text">When to stop generating these transactions (leave blank for no end date)</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Save Recurring Transaction</button>
+                        <a href="{% url 'recurring_transaction_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default date to today if not already set
+        const startDateInput = document.getElementById('id_start_date');
+        if (!startDateInput.value) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            startDateInput.value = `${year}-${month}-${day}`;
+        }
+    });
+</script>
+{% endblock %}

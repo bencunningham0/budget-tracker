@@ -1,0 +1,6 @@
+django>=5.1,<5.2
+python-dotenv>=1.0.0
+dj-database-url>=2.1.0
+whitenoise>=6.6.0
+psycopg2-binary>=2.9.9  # For PostgreSQL support
+gunicorn>=21.2.0  # For production server

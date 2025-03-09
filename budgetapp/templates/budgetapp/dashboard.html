@@ -1,0 +1,374 @@
+{% extends 'budgetapp/base.html' %}
+{% load budget_filters %}
+
+{% block title %}Budget Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>Budget Dashboard</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{% url 'transaction_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus"></i> Add Transaction
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">Income Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-light rounded">
+                            <div class="text-muted">Weekly</div>
+                            <div class="h5 mb-0">${{ total_weekly_income|floatformat:2|intcomma }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-light rounded">
+                            <div class="text-muted">Monthly</div>
+                            <div class="h5 mb-0">${{ total_monthly_income|floatformat:2|intcomma }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-light rounded">
+                            <div class="text-muted">Yearly</div>
+                            <div class="h5 mb-0">${{ total_yearly_income|floatformat:2|intcomma }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h6 class="border-bottom pb-2 mb-3">Income Sources:</h6>
+                <ul class="list-group">
+                    {% for income in incomes %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ income.source }} 
+                        <div>
+                            <span class="badge bg-primary rounded-pill">${{ income.amount|floatformat:2 }} ({{ income.get_frequency_display }})</span>
+                            <a href="{% url 'income_edit' income.id %}" class="btn btn-sm btn-outline-secondary ms-2">Edit</a>
+                            <a href="{% url 'income_delete' income.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item">No income sources added yet.</li>
+                    {% endfor %}
+                </ul>
+                
+                <div class="text-center mt-3">
+                    <a href="{% url 'income_create' %}" class="btn btn-success">Add Income Source</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">Budget Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body p-3">
+                                <h6 class="card-title text-muted mb-3">Weekly Budget Allocation</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Budgeted:</span>
+                                    <span class="h5 mb-0">${{ weekly_budgeted|floatformat:2|intcomma }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Remaining After Budgets:</span>
+                                    <span class="h5 mb-0 {% if income_remaining_after_budgets < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ income_remaining_after_budgets|floatformat:2|intcomma }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body p-3">
+                                <h6 class="card-title text-muted mb-3">Weekly Spending</h6>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>Average Spent:</span>
+                                    <span class="h5 mb-0">${{ weekly_spent|floatformat:2|intcomma }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Remaining After Spend:</span>
+                                    <span class="h5 mb-0 {% if income_remaining_after_spend < 0 %}text-danger{% else %}text-success{% endif %}">
+                                        ${{ income_remaining_after_spend|floatformat:2|intcomma }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <a href="{% url 'budget_create' %}" class="btn btn-success">Create New Budget</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h3>Your Budgets</h3>
+    <div>
+        <button id="edit-order-btn" class="btn btn-outline-secondary btn-sm">
+            <span class="edit-text">Edit Order</span>
+            <span class="save-text d-none">Save Order</span>
+        </button>
+        <div id="order-instructions" class="d-none small text-muted mt-1">
+            Drag and drop budgets to reorder them
+        </div>
+    </div>
+</div>
+
+<div id="budgets-container" class="row g-4">
+    {% for budget_item in budget_data %}
+    <div class="col-md-6 col-lg-4 budget-item" data-id="{{ budget_item.budget.id }}">
+        <div class="card budget-card shadow-sm h-100" style="cursor: pointer;" onclick="window.location='{% url 'budget_detail' budget_item.budget.id %}';">
+            <div class="card-header d-flex justify-content-between align-items-center {% if budget_item.percentage >= 50 %}bg-success text-white{% elif budget_item.percentage >= 25 %}bg-warning{% else %}bg-danger text-white{% endif %}">
+                <h5 class="card-title mb-0">
+                    <span class="drag-handle d-none me-2" title="Drag to reorder" style="cursor: grab;">&#8693;</span>
+                    {{ budget_item.budget.category }}
+                </h5>
+                <span>${{ budget_item.budget.amount|floatformat:2|intcomma }} ({{ budget_item.budget.get_frequency_display }})</span>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar {% if budget_item.percentage >= 50 %}bg-success{% elif budget_item.percentage >= 25 %}bg-warning{% else %}bg-danger{% endif %}" 
+                         role="progressbar" style="width: {{ budget_item.percentage }}%" 
+                         aria-valuenow="{{ budget_item.percentage }}" aria-valuemin="0" aria-valuemax="100">
+                    </div>
+                </div>
+                <h6>Balance: ${{ budget_item.balance|floatformat:2 }}</h6>
+                <p>Spent: ${{ budget_item.spent|floatformat:2 }}</p>
+                <div class="text-muted small">
+                    <div>Weekly Budget: ${{ budget_item.weekly_amount|floatformat:2 }}</div>
+                    <div>Weekly Average Spent: ${{ budget_item.weekly_spent|floatformat:2 }}</div>
+                </div>
+                
+                {% if budget_item.budget.rollover %}
+                <span class="badge bg-info">Rollover Enabled</span>
+                {% if budget_item.budget.rollover_max %}
+                <span class="badge bg-secondary">Max Rollover: ${{ budget_item.budget.rollover_max }}</span>
+                {% endif %}
+                {% endif %}
+                
+                <div class="mt-3 d-flex justify-content-between" onclick="event.stopPropagation();">
+                    <div>
+                        <a href="{% url 'budget_edit' budget_item.budget.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <a href="{% url 'budget_delete' budget_item.budget.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                    </div>
+                    <a href="{% url 'transaction_create_for_budget' budget_item.budget.id %}" class="btn btn-sm btn-outline-primary">Add Transaction</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            You haven't created any budgets yet. <a href="{% url 'budget_create' %}">Create your first budget</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row mt-5">
+    <div class="col-12">
+        <h3>Recent Transactions</h3>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Budget</th>
+                                <th>Description</th>
+                                <th class="text-end">Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr>
+                                <td>{{ transaction.date|date:"M d, Y" }}</td>
+                                <td>
+                                    <a href="{% url 'budget_detail' transaction.budget.id %}">
+                                        {{ transaction.budget.category }}
+                                    </a>
+                                </td>
+                                <td>{{ transaction.description }}</td>
+                                <td class="text-end">${{ transaction.amount|floatformat:2 }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'transaction_edit' transaction.id %}" class="btn btn-outline-secondary">Edit</a>
+                                        <a href="{% url 'transaction_delete' transaction.id %}" class="btn btn-outline-danger">Delete</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No transactions recorded yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Include Sortable.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const budgetsContainer = document.getElementById('budgets-container');
+    const editOrderBtn = document.getElementById('edit-order-btn');
+    const orderInstructions = document.getElementById('order-instructions');
+    const editText = editOrderBtn.querySelector('.edit-text');
+    const saveText = editOrderBtn.querySelector('.save-text');
+    
+    let sortable = null;
+    let isReorderingMode = false;
+    
+    // Get stored order from localStorage
+    const applyStoredOrder = () => {
+        try {
+            const storedOrder = localStorage.getItem('budget_order');
+            if (!storedOrder) return;
+            
+            const orderArray = JSON.parse(storedOrder);
+            if (!Array.isArray(orderArray) || orderArray.length === 0) return;
+            
+            // Create a document fragment to hold reordered items
+            const fragment = document.createDocumentFragment();
+            
+            // First, add items in the stored order
+            orderArray.forEach(id => {
+                const item = budgetsContainer.querySelector(`.budget-item[data-id="${id}"]`);
+                if (item) {
+                    fragment.appendChild(item.cloneNode(true));
+                    item.remove(); // Remove item from original position
+                }
+            });
+            
+            // Then add any items that weren't in the stored order
+            Array.from(budgetsContainer.querySelectorAll('.budget-item')).forEach(item => {
+                fragment.appendChild(item.cloneNode(true));
+                item.remove();
+            });
+            
+            // Append reordered items
+            budgetsContainer.appendChild(fragment);
+            
+            // Re-attach event listeners
+            reattachEventListeners();
+        } catch (error) {
+            console.error('Error applying stored budget order:', error);
+        }
+    };
+    
+    // Function to reattach event listeners after DOM changes
+    const reattachEventListeners = () => {
+        document.querySelectorAll('.budget-card').forEach(card => {
+            const budgetItem = card.closest('.budget-item');
+            if (budgetItem) {
+                const budgetId = budgetItem.getAttribute('data-id');
+                card.setAttribute('onclick', `window.location='{% url 'budget_detail' 999 %}'.replace('999', '${budgetId}');`);
+            }
+        });
+        
+        // Re-attach stop propagation to inner buttons/links
+        document.querySelectorAll('.budget-card .mt-3').forEach(buttonContainer => {
+            buttonContainer.setAttribute('onclick', 'event.stopPropagation();');
+        });
+    };
+    
+    // Apply stored order on page load
+    applyStoredOrder();
+    
+    // Toggle reordering mode
+    editOrderBtn.addEventListener('click', function() {
+        isReorderingMode = !isReorderingMode;
+        
+        if (isReorderingMode) {
+            // Enter reordering mode
+            editText.classList.add('d-none');
+            saveText.classList.remove('d-none');
+            orderInstructions.classList.remove('d-none');
+            
+            // Show drag handles
+            document.querySelectorAll('.drag-handle').forEach(handle => {
+                handle.classList.remove('d-none');
+            });
+            
+            // Disable card clicks during reordering
+            document.querySelectorAll('.budget-card').forEach(card => {
+                card.style.cursor = 'move';
+                card.removeAttribute('onclick');
+            });
+            
+            // Initialize Sortable
+            sortable = new Sortable(budgetsContainer, {
+                animation: 150,
+                handle: '.drag-handle',
+                draggable: '.budget-item',
+                forceFallback: true,
+                fallbackClass: 'sorting-budget-item',
+                onEnd: function() {
+                    // Update stored order when items are reordered
+                    const newOrder = Array.from(budgetsContainer.querySelectorAll('.budget-item'))
+                        .map(item => parseInt(item.getAttribute('data-id')));
+                    localStorage.setItem('budget_order', JSON.stringify(newOrder));
+                }
+            });
+        } else {
+            // Exit reordering mode
+            editText.classList.remove('d-none');
+            saveText.classList.add('d-none');
+            orderInstructions.classList.add('d-none');
+            
+            // Hide drag handles
+            document.querySelectorAll('.drag-handle').forEach(handle => {
+                handle.classList.add('d-none');
+            });
+            
+            // Restore card clicks
+            reattachEventListeners();
+            
+            // Destroy Sortable instance
+            if (sortable) {
+                sortable.destroy();
+                sortable = null;
+            }
+        }
+    });
+});
+</script>
+<style>
+    .sorting-budget-item {
+        background-color: #f8f9fa;
+        opacity: 0.8;
+    }
+    .drag-handle {
+        cursor: grab;
+        user-select: none;
+        font-size: 1.2rem;
+    }
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+</style>
+{% endblock %}

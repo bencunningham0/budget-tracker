@@ -1,0 +1,34 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}Delete Income Source{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">Delete Income Source</h4>
+            </div>
+            <div class="card-body">
+                <p class="fw-bold">Are you sure you want to delete the "{{ income.source }}" income source?</p>
+                
+                <p>This will remove:</p>
+                <ul>
+                    <li>The income source: {{ income.source }}</li>
+                    <li>Amount: ${{ income.amount|floatformat:2 }} ({{ income.get_frequency_display }})</li>
+                </ul>
+                
+                <p class="text-danger">This action cannot be undone.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete Income Source</button>
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

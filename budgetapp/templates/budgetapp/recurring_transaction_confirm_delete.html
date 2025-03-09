@@ -1,0 +1,48 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}Delete Recurring Transaction{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">Delete Recurring Transaction</h4>
+            </div>
+            <div class="card-body">
+                <p class="fw-bold">Are you sure you want to delete this recurring transaction?</p>
+                
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ recurring_transaction.description }}</h5>
+                        <p class="card-text">
+                            <strong>Budget:</strong> {{ recurring_transaction.budget.category }}<br>
+                            <strong>Amount:</strong> ${{ recurring_transaction.amount|floatformat:2 }}<br>
+                            <strong>Frequency:</strong> {{ recurring_transaction.get_frequency_display }}<br>
+                            <strong>Start Date:</strong> {{ recurring_transaction.start_date|date:"M d, Y" }}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <p><strong>Note:</strong> Deleting this recurring transaction will:</p>
+                    <ul>
+                        <li>Stop future occurrences from being generated</li>
+                        <li>Keep any existing transactions that were already created</li>
+                    </ul>
+                </div>
+                
+                <p class="text-danger">This action cannot be undone.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">Yes, Delete Recurring Transaction</button>
+                        <a href="{% url 'recurring_transaction_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

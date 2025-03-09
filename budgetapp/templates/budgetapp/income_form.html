@@ -1,0 +1,62 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}{{ action }} Income{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="card-title mb-0">{{ action }} Income Source</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <p>Please correct the errors below:</p>
+                        {% for field in form %}
+                            {% if field.errors %}
+                                <p>{{ field.label }}: {{ field.errors|striptags }}</p>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label for="id_source" class="form-label">Income Source</label>
+                        <input type="text" name="source" class="form-control" id="id_source" value="{{ form.source.value|default:'' }}" required>
+                        <div class="form-text">Example: Salary, Freelance Work, Investments, etc.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_amount" class="form-label">Income Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" name="amount" class="form-control" id="id_amount" value="{{ form.amount.value|default:'' }}" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="id_frequency" class="form-label">Income Frequency</label>
+                        <select name="frequency" class="form-select" id="id_frequency" required>
+                            <option value="" {% if not form.frequency.value %}selected{% endif %}>Select frequency</option>
+                            <option value="weekly" {% if form.frequency.value == 'weekly' %}selected{% endif %}>Weekly</option>
+                            <option value="fortnightly" {% if form.frequency.value == 'fortnightly' %}selected{% endif %}>Fortnightly</option>
+                            <option value="monthly" {% if form.frequency.value == 'monthly' %}selected{% endif %}>Monthly</option>
+                            <option value="yearly" {% if form.frequency.value == 'yearly' %}selected{% endif %}>Yearly</option>
+                        </select>
+                        <div class="form-text">How often you receive this income</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Save Income</button>
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
