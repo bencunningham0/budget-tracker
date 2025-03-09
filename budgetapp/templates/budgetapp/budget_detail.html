@@ -185,6 +185,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    const cacheKey = 'budget_chart_{{ budget.id }}';
+    const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    // Try to get cached data
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+        const { data, timestamp } = JSON.parse(cachedData);
+        if (timestamp && (Date.now() - timestamp) < cacheTimeout) {
+            createChart(data);
+            return;
+        }
+    }
+    
     // Get data from the historical periods
     const periods = [
         {% for period in historical_periods %}
@@ -197,6 +210,17 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endfor %}
     ];
     
+    // Cache the data
+    localStorage.setItem(cacheKey, JSON.stringify({
+        data: periods,
+        timestamp: Date.now()
+    }));
+    
+    // Create the chart
+    createChart(periods);
+});
+
+function createChart(periods) {
     // Reverse the periods so they're shown chronologically from left to right
     const sortedPeriods = [...periods].reverse().slice(0, 12);
     
@@ -256,6 +280,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-});
+}
 </script>
 {% endblock %}

@@ -12,15 +12,22 @@ class Budget(models.Model):
         ('yearly', 'Yearly'),
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets')
-    category = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets', db_index=True)
+    category = models.CharField(max_length=100, db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
-    rollover = models.BooleanField(default=False)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, db_index=True)
+    rollover = models.BooleanField(default=False, db_index=True)
     rollover_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'category']),
+            models.Index(fields=['user', 'frequency']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
     def __str__(self):
         return f"{self.category} - {self.amount} ({self.get_frequency_display()})"
 
@@ -32,8 +39,8 @@ class Budget(models.Model):
         return self.get_period_start_for_date(self.created_at.date())
 
     def get_current_balance(self):
-        # Get all transactions for this budget
-        transactions = self.transactions.all()
+        # Use select_related to optimize related table lookups
+        transactions = self.transactions.select_related('recurring_transaction').all()
         
         # Calculate the starting budget amount for the current period
         period_start = self.get_current_period_start()
@@ -60,8 +67,6 @@ class Budget(models.Model):
                 
                 # Check if last period is valid (after start date)
                 if last_period_start < start_date:
-                    # If the last period started before the start date,
-                    # adjust last_period_start
                     last_period_start = start_date
                 
                 last_period_transactions = transactions.filter(
@@ -127,11 +132,15 @@ class Budget(models.Model):
     
     def get_historical_periods(self, num_periods=6):
         """Return data about previous budget periods"""
+        # Prefetch all transactions to avoid N+1 queries
+        transactions = self.transactions.all()
+        transactions = list(transactions)  # Evaluate queryset once
+        
         periods = []
         current_period_start = self.get_current_period_start()
         
         # Start with current period
-        periods.append(self._get_period_data(current_period_start))
+        periods.append(self._get_period_data(current_period_start, transactions))
         
         # Add previous periods
         for i in range(1, num_periods):
@@ -143,7 +152,7 @@ class Budget(models.Model):
             if prev_period_start < self.get_start_date():
                 break
                 
-            periods.append(self._get_period_data(prev_period_start))
+            periods.append(self._get_period_data(prev_period_start, transactions))
             
         return periods
         
@@ -151,17 +160,19 @@ class Budget(models.Model):
         # Get the day before the current period start
         return period_start - timedelta(days=1)
         
-    def _get_period_data(self, period_start):
+    def _get_period_data(self, period_start, transactions=None):
         """Get budget data for a specific period"""
         period_end = self.get_period_end_for_date(period_start)
         
         # Get transactions in this period
-        transactions = self.transactions.filter(
-            date__gte=period_start,
-            date__lte=period_end
-        )
+        if transactions is None:
+            transactions = self.transactions.all()
+            transactions = list(transactions)  # Evaluate queryset once
         
-        total_spent = sum(t.amount for t in transactions)
+        period_transactions = [t for t in transactions 
+                             if period_start <= t.date.date() <= period_end]
+        
+        total_spent = sum(t.amount for t in period_transactions)
         
         # Calculate rollover from previous period if applicable
         rollover_amount = 0
@@ -175,17 +186,19 @@ class Budget(models.Model):
             if prev_period_start < start_date:
                 prev_period_start = start_date
             
-            # Get previous period's data to calculate rollover
-            prev_transactions = self.transactions.filter(
-                date__gte=prev_period_start,
-                date__lt=period_start
-            )
+            # Get previous period's transactions
+            prev_transactions = [t for t in transactions 
+                               if prev_period_start <= t.date.date() < period_start]
             
             prev_spent = sum(t.amount for t in prev_transactions)
             
             # Get rollover from previous period recursively
-            prev_period_data = self._get_period_data(prev_period_start) if prev_period_start > start_date else None
-            prev_rollover = prev_period_data['rollover_amount'] if prev_period_data else 0
+            if prev_period_start > start_date:
+                prev_period_data = self._get_period_data(prev_period_start, transactions)
+                prev_rollover = prev_period_data['rollover_amount']
+            else:
+                prev_rollover = 0
+                
             prev_budget = self.amount + prev_rollover
             
             # Calculate rollover amount
@@ -264,14 +277,21 @@ class Income(models.Model):
         ('variable', 'Variable'),  # Add variable option for irregular income
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incomes')
-    source = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incomes', db_index=True)
+    source = models.CharField(max_length=100, db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    is_variable = models.BooleanField(default=False, help_text="Whether this income source varies from period to period")
+    is_variable = models.BooleanField(default=False, db_index=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'source']),
+            models.Index(fields=['user', 'frequency']),
+            models.Index(fields=['user', 'is_variable']),
+        ]
+
     def __str__(self):
         return f"{self.source} - {self.amount} ({self.get_frequency_display()})"
     
@@ -341,12 +361,18 @@ class Income(models.Model):
 
 class IncomeTransaction(models.Model):
     """Model for tracking actual income received"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='income_transactions')
-    income = models.ForeignKey(Income, on_delete=models.CASCADE, related_name='income_transactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='income_transactions', db_index=True)
+    income = models.ForeignKey(Income, on_delete=models.CASCADE, related_name='income_transactions', db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.CharField(max_length=255)
-    date = models.DateTimeField(default=timezone.now)
+    date = models.DateTimeField(default=timezone.now, db_index=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['income', 'date']),
+        ]
+
     def __str__(self):
         return f"{self.description} - ${self.amount} ({self.date.date()})"
     
@@ -360,13 +386,19 @@ class IncomeTransaction(models.Model):
         super().save(*args, **kwargs)
 
 class Transaction(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transactions')
-    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='transactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transactions', db_index=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='transactions', db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.CharField(max_length=255)
-    date = models.DateTimeField(default=timezone.now)
-    recurring_transaction = models.ForeignKey('RecurringTransaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    date = models.DateTimeField(default=timezone.now, db_index=True)
+    recurring_transaction = models.ForeignKey('RecurringTransaction', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions', db_index=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['budget', 'date']),
+        ]
+
     def __str__(self):
         return f"{self.description} - ${self.amount} ({self.date.date()})"
         
@@ -388,16 +420,23 @@ class RecurringTransaction(models.Model):
         ('yearly', 'Yearly'),
     ]
     
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recurring_transactions')
-    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='recurring_transactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recurring_transactions', db_index=True)
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='recurring_transactions', db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.CharField(max_length=255)
-    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES)
-    start_date = models.DateField(default=date.today)
-    end_date = models.DateField(null=True, blank=True)
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, db_index=True)
+    start_date = models.DateField(default=date.today, db_index=True)
+    end_date = models.DateField(null=True, blank=True, db_index=True)
     last_generated = models.DateField(null=True, blank=True)
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=True, db_index=True)
     
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'budget']),
+            models.Index(fields=['user', 'active']),
+            models.Index(fields=['user', 'start_date']),
+        ]
+
     def __str__(self):
         return f"{self.budget.category}: {self.amount} - {self.description} ({self.get_frequency_display()})"
         
@@ -416,19 +455,29 @@ class RecurringTransaction(models.Model):
         
         # Generate transactions up to today
         while next_date <= today:
-            # Create the transaction
-            transaction = Transaction(
+            # Check if transaction already exists for this date
+            transaction_date = timezone.make_aware(datetime.combine(next_date, datetime.min.time()))
+            existing_transaction = Transaction.objects.filter(
                 user=self.user,
                 budget=self.budget,
-                amount=self.amount,
-                description=f"{self.description} (Recurring)",
-                date=datetime.combine(next_date, datetime.min.time()),
-                recurring_transaction=self
-            )
-            transaction.save()
-            created_transactions.append(transaction)
+                recurring_transaction=self,
+                date=transaction_date
+            ).exists()
             
-            # Update last generated date
+            if not existing_transaction:
+                # Create the transaction only if it doesn't exist
+                transaction = Transaction(
+                    user=self.user,
+                    budget=self.budget,
+                    amount=self.amount,
+                    description=f"{self.description} (Recurring)",
+                    date=transaction_date,
+                    recurring_transaction=self
+                )
+                transaction.save()
+                created_transactions.append(transaction)
+            
+            # Update last generated date regardless of whether we created a new transaction
             self.last_generated = next_date
             self.save()
             

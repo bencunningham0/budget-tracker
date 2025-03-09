@@ -14,4 +14,7 @@ python3 manage.py collectstatic --noinput --clear
 # Apply database migrations
 python3 manage.py migrate
 
+# Reset database sequences
+python3 manage.py sqlsequencereset budgetapp | python3 manage.py dbshell
+
 echo "BUILD END"

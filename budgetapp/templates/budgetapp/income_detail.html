@@ -152,6 +152,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    const cacheKey = 'income_chart_{{ income.id }}';
+    const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    // Try to get cached data
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+        const { data, timestamp } = JSON.parse(cachedData);
+        if (timestamp && (Date.now() - timestamp) < cacheTimeout) {
+            createChart(data);
+            return;
+        }
+    }
+    
     // Group income transactions by month
     const transactions = [
         {% for transaction in income_transactions %}
@@ -176,15 +189,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 date: new Date(year, month, 1)
             };
         }
-        
         monthlyData[key].amount += transaction.amount;
     });
     
     // Convert to array and sort chronologically
     const monthlyArray = Object.values(monthlyData).sort((a, b) => a.date - b.date);
     
+    // Cache the data
+    localStorage.setItem(cacheKey, JSON.stringify({
+        data: monthlyArray,
+        timestamp: Date.now()
+    }));
+    
+    // Create the chart
+    createChart(monthlyArray);
+});
+
+function createChart(monthlyData) {
     // Only show the last 12 months if there are more than 12 data points
-    const limitedData = monthlyArray.slice(-12);
+    const limitedData = monthlyData.slice(-12);
     
     // Create the chart
     const ctx = document.getElementById('incomeChart').getContext('2d');
@@ -224,6 +247,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-});
+}
 </script>
 {% endblock %}
