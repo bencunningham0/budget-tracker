@@ -132,7 +132,6 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = []  # Remove dynamic directory creation
 
 # Configure WhiteNoise for static file handling
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
