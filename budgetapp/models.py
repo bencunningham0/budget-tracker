@@ -212,10 +212,16 @@ class Budget(models.Model):
             # Get rollover from previous period recursively
             if prev_period_start > start_date:
                 prev_period_data = self._get_period_data(prev_period_start, transactions)
-                prev_rollover = prev_period_data['rollover_amount']
+                rollover_amount = prev_period_data['rollover_amount']
+                prev_budget_amount = self.amount + rollover_amount
+                rollover_amount = max(0, prev_budget_amount - prev_spent)
             else:
-                if self.rollover_max is not None:
-                    rollover_amount = min(rollover_amount, self.rollover_max)
+                # For the first period after start date, just calculate based on previous period
+                rollover_amount = max(0, self.amount - prev_spent)
+            
+            # Apply rollover_max limit if set
+            if self.rollover_max is not None:
+                rollover_amount = min(rollover_amount, self.rollover_max)
         
         # Calculate total budget including rollover
         budget_amount = self.amount + rollover_amount
