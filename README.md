@@ -5,6 +5,7 @@ A Django-based personal budget tracking application that helps users manage thei
 ## Features
 
 - Multi-user support with secure authentication
+- Google OAuth 2.0 login integration
 - Income tracking with support for different payment frequencies
 - Budget creation and management
 - Transaction tracking and history
@@ -22,6 +23,7 @@ A Django-based personal budget tracking application that helps users manage thei
 - Chart.js 4.4
 - SQLite (default) / PostgreSQL (production)
 - SortableJS for drag-and-drop functionality
+- Python Social Auth for OAuth integration
 
 ## Local Development Setup
 
@@ -42,17 +44,32 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Run migrations
+4. Set up Google OAuth 2.0 (Required for Google Login)
+   1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+   2. Create a new project or select an existing one
+   3. Enable the Google+ API or Google People API
+   4. Go to Credentials and create an OAuth 2.0 Client ID
+   5. Configure the OAuth consent screen
+   6. Add authorized origins and redirect URIs:
+      - For local development:
+        - Origin: `http://localhost:8000`
+        - Redirect URI: `http://localhost:8000/oauth/complete/google-oauth2/`
+      - For production:
+        - Origin: `https://your-app-name.vercel.app`
+        - Redirect URI: `https://your-app-name.vercel.app/oauth/complete/google-oauth2/`
+   7. Copy your Client ID and Client Secret
+
+5. Run migrations
 ```bash
 python manage.py migrate
 ```
 
-5. Create a superuser (optional)
+6. Create a superuser (optional)
 ```bash
 python manage.py createsuperuser
 ```
 
-6. Run the development server
+7. Run the development server
 ```bash
 python manage.py runserver
 ```
@@ -68,6 +85,8 @@ DEBUG=False
 SECRET_KEY=your-secret-key-here
 ALLOWED_HOSTS=.vercel.app,your-domain.com
 DATABASE_URL=your-database-url  # For PostgreSQL in production
+GOOGLE_OAUTH2_KEY=your-google-client-id
+GOOGLE_OAUTH2_SECRET=your-google-client-secret
 ```
 
 ## Deployment on Vercel
@@ -100,6 +119,8 @@ vercel
    - `SECRET_KEY`: [your-secret-key]
    - `ALLOWED_HOSTS`: [your-vercel-domain]
    - `DATABASE_URL`: [your-database-url]
+   - `GOOGLE_OAUTH2_KEY`: [your-google-client-id]
+   - `GOOGLE_OAUTH2_SECRET`: [your-google-client-secret]
 
 ## Contributing
 

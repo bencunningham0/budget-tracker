@@ -22,4 +22,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('budget/', include('budgetapp.urls')),
     path('', RedirectView.as_view(url='/budget/', permanent=True)),
+    path('oauth/', include('social_django.urls', namespace='social')),
 ]
