@@ -6,3 +6,4 @@ gunicorn>=21.2.0  # For production server
 pytz>=2023.3  # For timezone support
 social-auth-app-django>=5.4.3
 requests-oauthlib>=2.0.0
+social-auth-core>=4.5.6
