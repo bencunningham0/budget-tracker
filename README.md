@@ -45,19 +45,15 @@ pip install -r requirements.txt
 ```
 
 4. Set up Google OAuth 2.0 (Required for Google Login)
-   1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-   2. Create a new project or select an existing one
-   3. Enable the Google+ API or Google People API
-   4. Go to Credentials and create an OAuth 2.0 Client ID
-   5. Configure the OAuth consent screen
-   6. Add authorized origins and redirect URIs:
+   - Follow the [Integrating Google Sign-In into your web app](https://developers.google.com/identity/sign-in/web/sign-in) guide to create a project
+   - Add authorized origins and redirect URIs:
       - For local development:
         - Origin: `http://localhost:8000`
         - Redirect URI: `http://localhost:8000/oauth/complete/google-oauth2/`
       - For production:
-        - Origin: `https://your-app-name.vercel.app`
-        - Redirect URI: `https://your-app-name.vercel.app/oauth/complete/google-oauth2/`
-   7. Copy your Client ID and Client Secret
+        - Origin: `https://your-domain.com`
+        - Redirect URI: `https://your-domain.com/oauth/complete/google-oauth2/`
+   - Copy your Client ID and Client Secret
 
 5. Run migrations
 ```bash
@@ -89,46 +85,21 @@ GOOGLE_OAUTH2_KEY=your-google-client-id
 GOOGLE_OAUTH2_SECRET=your-google-client-secret
 ```
 
-## Deployment on Vercel
+You can use `python -c 'import secrets; print(secrets.token_hex(100))` to generate your secret key.
 
-### Option 1: Using Vercel CLI
-1. Install Vercel CLI
-```bash
-npm i -g vercel
-```
+## Deployment on Vercel & Neon
 
-2. Build the project locally
-```bash
-pip install -r requirements.txt
-python manage.py collectstatic
-```
+To host this project in the cloud, Neon (DB) & Vercel (Backend) can be used.
 
-3. Deploy to Vercel
-```bash
-vercel
-```
+### Create Neon Project
+1. Sign up or login to [Neon](https://neon.tech/)
+2. Create the budget_tracker project
+3. Copy the database URL provided - this will be used in your environment variables
 
-### Option 2: Using Vercel Web Interface
-1. Import your repository in the Vercel dashboard
-2. Configure the build settings:
-   - Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
-   - Output Directory: `staticfiles`
-   - Install Command: `pip install -r requirements.txt`
-3. Add the following environment variables in your Vercel project settings:
-   - `DEBUG`: `False`
-   - `SECRET_KEY`: [your-secret-key]
-   - `ALLOWED_HOSTS`: [your-vercel-domain]
-   - `DATABASE_URL`: [your-database-url]
-   - `GOOGLE_OAUTH2_KEY`: [your-google-client-id]
-   - `GOOGLE_OAUTH2_SECRET`: [your-google-client-secret]
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Create Vercel Application
+1. Sign up or login to [Vercel](https://vercel.app).
+2. Import your forked repository in the Vercel dashboard, or link to main.
+3. Add the environment variables from the section above to your apps configuration.
 
 ## License
 
