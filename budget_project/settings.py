@@ -48,6 +48,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'budgetapp.middleware.TimezoneMiddleware',  # Add timezone middleware
 ]
 
 ROOT_URLCONF = 'budget_project.urls'
@@ -63,6 +64,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'budgetapp.context_processors.timezone_info',  # Add timezone context processor
             ],
         },
     },
@@ -85,8 +87,8 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            #'NAME': BASE_DIR / 'db.sqlite3',
-            'NAME': "C:\\Users\\Ben\Documents\\projects\\budget\\db.sqlite3"
+            'NAME': BASE_DIR / 'db.sqlite3',
+            #'NAME': "C:\\Users\\Ben\Documents\\projects\\budget\\db.sqlite3"
         }
     }
 

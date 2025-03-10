@@ -7,6 +7,7 @@ urlpatterns = [
     path('register/', views.register, name='register'),
     path('login/', auth_views.LoginView.as_view(template_name='budgetapp/login.html'), name='login'),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    path('settings/', views.user_settings, name='user_settings'),
     
     # Budget URLs
     path('budget/create/', views.budget_create, name='budget_create'),

@@ -187,16 +187,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const cacheKey = 'budget_chart_{{ budget.id }}';
     const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
+    // Use transaction counts as version to invalidate cache when transactions change
+    const cacheVersion = '{{ transactions.count }}';
     
     // Try to get cached data
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
-        const { data, timestamp } = JSON.parse(cachedData);
-        if (timestamp && (Date.now() - timestamp) < cacheTimeout) {
-            createChart(data);
-            return;
+        try {
+            const { data, timestamp, version } = JSON.parse(cachedData);
+            // Only use cache if not expired and version matches (no new transactions)
+            if (timestamp && 
+                (Date.now() - timestamp) < cacheTimeout && 
+                version === cacheVersion) {
+                createChart(data);
+                return;
+            }
+        } catch (e) {
+            // If there's any error parsing the cached data, ignore it
+            console.error('Error parsing cached chart data:', e);
         }
     }
+    
+    // Clear any invalid cache
+    localStorage.removeItem(cacheKey);
     
     // Get data from the historical periods
     const periods = [
@@ -210,10 +223,11 @@ document.addEventListener('DOMContentLoaded', function() {
         {% endfor %}
     ];
     
-    // Cache the data
+    // Cache the data with version information
     localStorage.setItem(cacheKey, JSON.stringify({
         data: periods,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        version: cacheVersion
     }));
     
     // Create the chart

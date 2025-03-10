@@ -1,0 +1,196 @@
+{% extends 'budgetapp/base.html' %}
+
+{% block title %}User Settings{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2>User Settings</h2>
+        <p class="text-muted">Update your account preferences and settings</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <!-- Settings navigation -->
+        <div class="list-group mb-4">
+            <a href="#profile" class="list-group-item list-group-item-action active" data-bs-toggle="list">
+                Profile Settings
+            </a>
+            <a href="#password" class="list-group-item list-group-item-action" data-bs-toggle="list">
+                Change Password
+            </a>
+        </div>
+
+        <!-- Current timezone info -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0">Current Timezone</h6>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ current_timezone }}</p>
+                <small class="text-muted">
+                    Current time: {% now "F j, Y, g:i a" %}
+                    {% if is_dst %}
+                    <span class="badge bg-info">DST active</span>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <div class="tab-content">
+            <!-- Profile settings form -->
+            <div class="tab-pane fade show active" id="profile">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Profile Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="profile">
+                            
+                            {% if user_form.errors or profile_form.errors %}
+                            <div class="alert alert-danger">
+                                <p>Please correct the errors below:</p>
+                                {% for field in user_form %}
+                                    {% if field.errors %}
+                                        <p>{{ field.label }}: {{ field.errors|striptags }}</p>
+                                    {% endif %}
+                                {% endfor %}
+                                {% for field in profile_form %}
+                                    {% if field.errors %}
+                                        <p>{{ field.label }}: {{ field.errors|striptags }}</p>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            
+                            <!-- User form fields -->
+                            <div class="mb-3">
+                                <label for="id_first_name" class="form-label">First Name</label>
+                                <input type="text" name="first_name" id="id_first_name" class="form-control" 
+                                       value="{{ user_form.first_name.value|default:'' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_last_name" class="form-label">Last Name</label>
+                                <input type="text" name="last_name" id="id_last_name" class="form-control" 
+                                       value="{{ user_form.last_name.value|default:'' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_email" class="form-label">Email Address</label>
+                                <input type="email" name="email" id="id_email" class="form-control" 
+                                       value="{{ user_form.email.value }}" required>
+                            </div>
+                            
+                            <!-- Profile form fields -->
+                            <div class="mb-3">
+                                <label for="id_timezone" class="form-label">Timezone</label>
+                                <select name="timezone" id="id_timezone" class="form-select">
+                                    {% for tz_value, tz_name in profile_form.fields.timezone.choices %}
+                                        <option value="{{ tz_value }}" 
+                                        {% if profile_form.timezone.value == tz_value %}selected{% endif %}>
+                                            {{ tz_name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">{{ profile_form.timezone.help_text }}</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Save Profile Settings</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Password change form -->
+            <div class="tab-pane fade" id="password">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Change Password</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="password">
+                            
+                            {% if password_form.errors %}
+                            <div class="alert alert-danger">
+                                <p>Please correct the errors below:</p>
+                                {% for field in password_form %}
+                                    {% if field.errors %}
+                                        <p>{{ field.label }}: {{ field.errors|striptags }}</p>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <label for="id_old_password" class="form-label">Current Password</label>
+                                <input type="password" name="old_password" id="id_old_password" class="form-control" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_new_password1" class="form-label">New Password</label>
+                                <input type="password" name="new_password1" id="id_new_password1" class="form-control" required>
+                                <div class="form-text">
+                                    <ul>
+                                        <li>Your password can't be too similar to your other personal information.</li>
+                                        <li>Your password must contain at least 8 characters.</li>
+                                        <li>Your password can't be a commonly used password.</li>
+                                        <li>Your password can't be entirely numeric.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_new_password2" class="form-label">Confirm New Password</label>
+                                <input type="password" name="new_password2" id="id_new_password2" class="form-control" required>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">Change Password</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle tab navigation and URL hash
+    const hash = window.location.hash;
+    if (hash) {
+        const tab = document.querySelector(`[href="${hash}"]`);
+        if (tab) {
+            tab.click();
+        }
+    }
+    
+    // Filter timezone dropdown
+    const timezoneSelect = document.getElementById('id_timezone');
+    if (timezoneSelect) {
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'form-control mb-2';
+        searchInput.placeholder = 'Search timezone...';
+        timezoneSelect.parentNode.insertBefore(searchInput, timezoneSelect);
+        
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            Array.from(timezoneSelect.options).forEach(option => {
+                const text = option.text.toLowerCase();
+                option.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

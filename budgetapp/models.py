@@ -1,8 +1,25 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from datetime import timedelta, datetime, date
 from decimal import Decimal
+import pytz
+
+# User Profile model to store additional user settings
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    timezone = models.CharField(max_length=50, default='UTC', choices=[(tz, tz) for tz in pytz.common_timezones])
+    
+    def __str__(self):
+        return f"{self.user.username}'s profile"
+
+# Signal handler to create user profile when a new user is created
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    if created:
+        UserProfile.objects.create(user=instance)
 
 class Budget(models.Model):
     FREQUENCY_CHOICES = [
@@ -197,14 +214,6 @@ class Budget(models.Model):
                 prev_period_data = self._get_period_data(prev_period_start, transactions)
                 prev_rollover = prev_period_data['rollover_amount']
             else:
-                prev_rollover = 0
-                
-            prev_budget = self.amount + prev_rollover
-            
-            # Calculate rollover amount
-            remaining = prev_budget - prev_spent
-            if remaining > 0:
-                rollover_amount = remaining
                 if self.rollover_max is not None:
                     rollover_amount = min(rollover_amount, self.rollover_max)
         

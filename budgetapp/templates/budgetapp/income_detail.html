@@ -154,16 +154,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const cacheKey = 'income_chart_{{ income.id }}';
     const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
+    const cacheVersion = '{{ income.income_transactions.count }}'; // Use transaction count as version
     
     // Try to get cached data
     const cachedData = localStorage.getItem(cacheKey);
     if (cachedData) {
-        const { data, timestamp } = JSON.parse(cachedData);
-        if (timestamp && (Date.now() - timestamp) < cacheTimeout) {
-            createChart(data);
-            return;
+        try {
+            const { data, timestamp, version } = JSON.parse(cachedData);
+            // Only use cache if not expired and version matches (no new transactions)
+            if (timestamp && 
+                (Date.now() - timestamp) < cacheTimeout && 
+                version === cacheVersion) {
+                createChart(data);
+                return;
+            }
+        } catch (e) {
+            // If there's any error parsing the cached data, ignore it
+            console.error('Error parsing cached chart data:', e);
         }
     }
+    
+    // Clear any invalid cache
+    localStorage.removeItem(cacheKey);
     
     // Group income transactions by month
     const transactions = [
@@ -195,10 +207,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Convert to array and sort chronologically
     const monthlyArray = Object.values(monthlyData).sort((a, b) => a.date - b.date);
     
-    // Cache the data
+    // Cache the data with version information
     localStorage.setItem(cacheKey, JSON.stringify({
         data: monthlyArray,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        version: cacheVersion
     }));
     
     // Create the chart

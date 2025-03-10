@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login, authenticate
+from django.contrib.auth import login, authenticate, update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib import messages
 from django.db.models import Sum, Prefetch
 from django.utils import timezone
@@ -9,9 +10,47 @@ from django.views.decorators.cache import cache_page
 from decimal import Decimal
 from .forms import (
     UserRegistrationForm, BudgetForm, IncomeForm, TransactionForm, 
-    RecurringTransactionForm, IncomeTransactionForm
+    RecurringTransactionForm, IncomeTransactionForm, UserSettingsForm, ProfileSettingsForm
 )
-from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction
+from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction, UserProfile
+
+# Cache utility functions
+def clear_user_cache(user):
+    """Clear all cache keys related to a user"""
+    # Clear dashboard cache
+    cache.delete(f'dashboard_data_{user.id}')
+
+def clear_budget_cache(budget):
+    """Clear cache for a specific budget"""
+    cache.delete(f'budget_detail_{budget.id}')
+    clear_user_cache(budget.user)
+
+def clear_income_cache(income):
+    """Clear cache for a specific income"""
+    cache.delete(f'income_detail_{income.id}')
+    clear_user_cache(income.user)
+
+def clear_transaction_cache(transaction):
+    """Clear cache when a transaction is changed"""
+    clear_budget_cache(transaction.budget)
+
+def clear_income_transaction_cache(income_transaction):
+    """Clear cache when an income transaction is changed"""
+    clear_income_cache(income_transaction.income)
+
+# Add a utility function to clear recurring transaction cache
+def clear_recurring_transaction_cache(recurring_transaction):
+    """Clear cache when a recurring transaction is changed"""
+    # Since recurring transactions affect their associated budget
+    clear_budget_cache(recurring_transaction.budget)
+
+# Add a utility function to create user profile if it doesn't exist
+def get_or_create_profile(user):
+    """Get the user's profile or create one if it doesn't exist"""
+    try:
+        return user.profile
+    except UserProfile.DoesNotExist:
+        return UserProfile.objects.create(user=user)
 
 def register(request):
     if request.method == 'POST':
@@ -25,6 +64,56 @@ def register(request):
     else:
         form = UserRegistrationForm()
     return render(request, 'budgetapp/register.html', {'form': form})
+
+@login_required
+def user_settings(request):
+    """View for user to update their settings"""
+    profile = get_or_create_profile(request.user)
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        if action == 'profile':
+            # Handle profile form submission
+            user_form = UserSettingsForm(request.POST, instance=request.user)
+            profile_form = ProfileSettingsForm(request.POST, instance=profile)
+            
+            if user_form.is_valid() and profile_form.is_valid():
+                user_form.save()
+                profile_form.save()
+                messages.success(request, "Your profile has been updated successfully!")
+                
+                # Clear cache to reflect new settings
+                clear_user_cache(request.user)
+                
+                return redirect('user_settings')
+            
+        elif action == 'password':
+            # Handle password form submission
+            password_form = PasswordChangeForm(user=request.user, data=request.POST)
+            
+            if password_form.is_valid():
+                user = password_form.save()
+                # Keep user logged in after password change
+                update_session_auth_hash(request, user)
+                messages.success(request, "Your password has been changed successfully!")
+                return redirect('user_settings')
+        
+        # If we got here, there were validation errors in one of the forms
+        messages.error(request, "Please correct the errors below.")
+    else:
+        # GET request, show initial forms
+        user_form = UserSettingsForm(instance=request.user)
+        profile_form = ProfileSettingsForm(instance=profile)
+        password_form = PasswordChangeForm(user=request.user)
+    
+    context = {
+        'user_form': user_form,
+        'profile_form': profile_form,
+        'password_form': password_form,
+    }
+    
+    return render(request, 'budgetapp/user_settings.html', context)
 
 # Dashboard view - main page
 @login_required
@@ -145,6 +234,10 @@ def budget_create(request):
             budget = form.save(commit=False)
             budget.user = request.user
             budget.save()
+            
+            # Clear user cache when budget is created
+            clear_user_cache(request.user)
+            
             messages.success(request, "Budget created successfully!")
             return redirect('dashboard')
     else:
@@ -159,7 +252,11 @@ def budget_edit(request, pk):
     if request.method == 'POST':
         form = BudgetForm(request.POST, instance=budget)
         if form.is_valid():
-            form.save()
+            updated_budget = form.save()
+            
+            # Clear cache when budget is updated
+            clear_budget_cache(updated_budget)
+            
             messages.success(request, "Budget updated successfully!")
             return redirect('dashboard')
     else:
@@ -172,6 +269,9 @@ def budget_delete(request, pk):
     budget = get_object_or_404(Budget, pk=pk, user=request.user)
     
     if request.method == 'POST':
+        # Clear cache before deleting the budget
+        clear_budget_cache(budget)
+        
         budget.delete()
         messages.success(request, "Budget deleted successfully!")
         return redirect('dashboard')
@@ -221,6 +321,9 @@ def income_create(request):
                 
             income.save()
             
+            # Clear user cache when income is created
+            clear_user_cache(request.user)
+            
             messages.success(request, "Income added successfully!")
             
             # Redirect to add income transaction if variable income
@@ -248,6 +351,10 @@ def income_edit(request, pk):
                 income.frequency = 'variable'
                 
             income.save()
+            
+            # Clear cache when income is updated
+            clear_income_cache(income)
+            
             messages.success(request, "Income updated successfully!")
             return redirect('dashboard')
     else:
@@ -260,6 +367,9 @@ def income_delete(request, pk):
     income = get_object_or_404(Income, pk=pk, user=request.user)
     
     if request.method == 'POST':
+        # Clear cache before deleting the income
+        clear_income_cache(income)
+        
         income.delete()
         messages.success(request, "Income deleted successfully!")
         return redirect('dashboard')
@@ -274,6 +384,10 @@ def transaction_create(request):
             transaction = form.save(commit=False)
             transaction.user = request.user
             transaction.save()
+            
+            # Clear cache when transaction is created
+            clear_transaction_cache(transaction)
+            
             messages.success(request, "Transaction recorded successfully!")
             return redirect('dashboard')
     else:
@@ -288,9 +402,13 @@ def transaction_edit(request, pk):
     if request.method == 'POST':
         form = TransactionForm(request.user, request.POST, instance=transaction)
         if form.is_valid():
-            form.save()
+            updated_transaction = form.save()
+            
+            # Clear cache when transaction is updated
+            clear_transaction_cache(updated_transaction)
+            
             messages.success(request, "Transaction updated successfully!")
-            return redirect('budget_detail', pk=transaction.budget.id)
+            return redirect('budget_detail', pk=updated_transaction.budget.id)
     else:
         form = TransactionForm(request.user, instance=transaction)
     
@@ -302,6 +420,9 @@ def transaction_delete(request, pk):
     budget_id = transaction.budget.id
     
     if request.method == 'POST':
+        # Clear cache before deleting the transaction
+        clear_transaction_cache(transaction)
+        
         transaction.delete()
         messages.success(request, "Transaction deleted successfully!")
         return redirect('budget_detail', pk=budget_id)
@@ -318,6 +439,10 @@ def transaction_create_for_budget(request, budget_pk):
             transaction = form.save(commit=False)
             transaction.user = request.user
             transaction.save()
+            
+            # Clear cache when transaction is created
+            clear_transaction_cache(transaction)
+            
             messages.success(request, "Transaction recorded successfully!")
             return redirect('budget_detail', pk=budget.id)
     else:
@@ -345,6 +470,10 @@ def recurring_transaction_create(request):
             recurring_transaction = form.save(commit=False)
             recurring_transaction.user = request.user
             recurring_transaction.save()
+            
+            # Clear cache when recurring transaction is created
+            clear_recurring_transaction_cache(recurring_transaction)
+            
             messages.success(request, "Recurring transaction created successfully!")
             return redirect('recurring_transaction_list')
     else:
@@ -359,7 +488,11 @@ def recurring_transaction_edit(request, pk):
     if request.method == 'POST':
         form = RecurringTransactionForm(request.user, request.POST, instance=recurring_transaction)
         if form.is_valid():
-            form.save()
+            updated_transaction = form.save()
+            
+            # Clear cache when recurring transaction is updated
+            clear_recurring_transaction_cache(updated_transaction)
+            
             messages.success(request, "Recurring transaction updated successfully!")
             return redirect('recurring_transaction_list')
     else:
@@ -372,6 +505,9 @@ def recurring_transaction_delete(request, pk):
     recurring_transaction = get_object_or_404(RecurringTransaction, pk=pk, user=request.user)
     
     if request.method == 'POST':
+        # Clear cache before deleting the recurring transaction
+        clear_recurring_transaction_cache(recurring_transaction)
+        
         recurring_transaction.delete()
         messages.success(request, "Recurring transaction deleted successfully!")
         return redirect('recurring_transaction_list')
@@ -385,6 +521,9 @@ def recurring_transaction_toggle(request, pk):
     # Toggle active state
     recurring_transaction.active = not recurring_transaction.active
     recurring_transaction.save()
+    
+    # Clear cache when recurring transaction is toggled
+    clear_recurring_transaction_cache(recurring_transaction)
     
     status = "activated" if recurring_transaction.active else "deactivated"
     messages.success(request, f"Recurring transaction {status} successfully!")
@@ -420,6 +559,10 @@ def income_transaction_create(request):
             income_transaction = form.save(commit=False)
             income_transaction.user = request.user
             income_transaction.save()
+            
+            # Clear cache when income transaction is created
+            clear_income_transaction_cache(income_transaction)
+            
             messages.success(request, "Income transaction recorded successfully!")
             return redirect('income_transaction_list')
     else:
@@ -434,7 +577,11 @@ def income_transaction_edit(request, pk):
     if request.method == 'POST':
         form = IncomeTransactionForm(request.user, request.POST, instance=income_transaction)
         if form.is_valid():
-            form.save()
+            updated_transaction = form.save()
+            
+            # Clear cache when income transaction is updated
+            clear_income_transaction_cache(updated_transaction)
+            
             messages.success(request, "Income transaction updated successfully!")
             return redirect('income_transaction_list')
     else:
@@ -448,6 +595,9 @@ def income_transaction_delete(request, pk):
     income_id = income_transaction.income.id
     
     if request.method == 'POST':
+        # Clear cache before deleting the income transaction
+        clear_income_transaction_cache(income_transaction)
+        
         income_transaction.delete()
         messages.success(request, "Income transaction deleted successfully!")
         return redirect('income_transaction_list')
@@ -464,6 +614,10 @@ def income_transaction_create_for_income(request, income_pk):
             income_transaction = form.save(commit=False)
             income_transaction.user = request.user
             income_transaction.save()
+            
+            # Clear cache when income transaction is created
+            clear_income_transaction_cache(income_transaction)
+            
             messages.success(request, "Income transaction recorded successfully!")
             return redirect('income_detail', pk=income.id)
     else:

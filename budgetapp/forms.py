@@ -1,7 +1,8 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import UserCreationForm, PasswordChangeForm
 from django.contrib.auth.models import User
-from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction
+from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction, UserProfile
+import pytz
 
 class UserRegistrationForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -16,6 +17,29 @@ class UserRegistrationForm(UserCreationForm):
         if commit:
             user.save()
         return user
+
+# User Settings Forms
+class UserSettingsForm(forms.ModelForm):
+    """Form for updating basic user information"""
+    first_name = forms.CharField(max_length=30, required=False)
+    last_name = forms.CharField(max_length=30, required=False)
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email']
+
+class ProfileSettingsForm(forms.ModelForm):
+    """Form for updating user profile settings"""
+    timezone = forms.ChoiceField(
+        choices=[(tz, tz) for tz in pytz.common_timezones],
+        required=True,
+        help_text="Select your local timezone to ensure dates and times are displayed correctly."
+    )
+
+    class Meta:
+        model = UserProfile
+        fields = ['timezone']
 
 class BudgetForm(forms.ModelForm):
     class Meta:
