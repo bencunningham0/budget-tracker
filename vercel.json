@@ -9,9 +9,20 @@
           "runtime": "python3.9",
           "installCommand": "python3 -m ensurepip && python3 -m pip install -r requirements.txt"
         }
+      },
+      {
+        "src": "build_files.sh",
+        "use": "@vercel/static-build",
+        "config": {
+          "distDir": "staticfiles_build"
+        }
       }
     ],
     "routes": [
+      {
+        "src": "/static/(.*)",
+        "dest": "/static/$1"
+      },
       {
         "src": "/(.*)",
         "dest": "budget_project/wsgi.py"
