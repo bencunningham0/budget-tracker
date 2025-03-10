@@ -30,19 +30,27 @@ def clear_income_cache(income):
     cache.delete(f'income_detail_{income.id}')
     clear_user_cache(income.user)
 
+# Utility functions for cache management
 def clear_transaction_cache(transaction):
     """Clear cache when a transaction is changed"""
-    clear_budget_cache(transaction.budget)
+    # Clear budget-specific caches
+    cache.delete(f'budget_detail_{transaction.budget.id}')
+    # Clear dashboard cache for this user
+    cache.delete(f'dashboard_data_{transaction.user.id}')
 
 def clear_income_transaction_cache(income_transaction):
     """Clear cache when an income transaction is changed"""
-    clear_income_cache(income_transaction.income)
+    # Clear income-specific caches
+    cache.delete(f'income_detail_{income_transaction.income.id}')
+    # Clear dashboard cache for this user
+    cache.delete(f'dashboard_data_{income_transaction.user.id}')
 
-# Add a utility function to clear recurring transaction cache
 def clear_recurring_transaction_cache(recurring_transaction):
     """Clear cache when a recurring transaction is changed"""
-    # Since recurring transactions affect their associated budget
-    clear_budget_cache(recurring_transaction.budget)
+    # Clear budget-specific caches
+    cache.delete(f'budget_detail_{recurring_transaction.budget.id}')
+    # Clear dashboard cache for this user
+    cache.delete(f'dashboard_data_{recurring_transaction.user.id}')
 
 # Add a utility function to create user profile if it doesn't exist
 def get_or_create_profile(user):

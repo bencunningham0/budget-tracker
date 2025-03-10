@@ -62,8 +62,11 @@ class Budget(models.Model):
         # Calculate the starting budget amount for the current period
         period_start = self.get_current_period_start()
         
+        # Convert to timezone-aware datetime for comparison
+        period_start_dt = timezone.make_aware(datetime.combine(period_start, datetime.min.time()))
+        
         # Get transactions from this period
-        current_period_transactions = transactions.filter(date__gte=period_start)
+        current_period_transactions = transactions.filter(date__gte=period_start_dt)
         
         # Calculate spent amount in current period
         spent = sum(t.amount for t in current_period_transactions)
@@ -86,9 +89,12 @@ class Budget(models.Model):
                 if last_period_start < start_date:
                     last_period_start = start_date
                 
+                # Convert to timezone-aware datetime for comparison
+                last_period_start_dt = timezone.make_aware(datetime.combine(last_period_start, datetime.min.time()))
+                
                 last_period_transactions = transactions.filter(
-                    date__gte=last_period_start,
-                    date__lt=period_start
+                    date__gte=last_period_start_dt,
+                    date__lt=period_start_dt
                 )
                 
                 last_period_spent = sum(t.amount for t in last_period_transactions)
@@ -186,8 +192,12 @@ class Budget(models.Model):
             transactions = self.transactions.all()
             transactions = list(transactions)  # Evaluate queryset once
         
+        # Convert date objects to timezone-aware datetime for proper comparison
+        period_start_dt = timezone.make_aware(datetime.combine(period_start, datetime.min.time()))
+        period_end_dt = timezone.make_aware(datetime.combine(period_end, datetime.max.time()))
+        
         period_transactions = [t for t in transactions 
-                             if period_start <= t.date.date() <= period_end]
+                             if period_start_dt <= t.date <= period_end_dt]
         
         total_spent = sum(t.amount for t in period_transactions)
         
@@ -203,9 +213,13 @@ class Budget(models.Model):
             if prev_period_start < start_date:
                 prev_period_start = start_date
             
+            # Convert date objects to timezone-aware datetime for proper comparison
+            prev_period_start_dt = timezone.make_aware(datetime.combine(prev_period_start, datetime.min.time()))
+            period_start_dt = timezone.make_aware(datetime.combine(period_start, datetime.min.time()))
+            
             # Get previous period's transactions
             prev_transactions = [t for t in transactions 
-                               if prev_period_start <= t.date.date() < period_start]
+                               if prev_period_start_dt <= t.date < period_start_dt]
             
             prev_spent = sum(t.amount for t in prev_transactions)
             
