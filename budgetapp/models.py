@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 import json
+from django.core.serializers.json import DjangoJSONEncoder
 from datetime import timedelta, datetime, date
 from decimal import Decimal
 import pytz
@@ -567,6 +568,17 @@ def update_budget_aggregates(budget):
     avg_weekly_spent = budget.get_avg_weekly_spent()
     # Store up to 52 historical periods
     historical_periods = budget.get_historical_periods(num_periods=52)
+    # Ensure all date/datetime objects are JSON serializable
+    if hasattr(budget._meta.get_field('historical_periods'), 'get_prep_value'):
+        # If using JSONField, ensure serialization
+        try:
+            json.dumps(historical_periods, cls=DjangoJSONEncoder)
+        except TypeError:
+            # Convert all date/datetime to isoformat
+            for period in historical_periods:
+                for k, v in period.items():
+                    if hasattr(v, 'isoformat'):
+                        period[k] = v.isoformat()
     budget.total_spent = total_spent
     budget.avg_weekly_spent = avg_weekly_spent
     budget.historical_periods = historical_periods
