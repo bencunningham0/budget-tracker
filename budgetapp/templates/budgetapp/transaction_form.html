@@ -30,7 +30,7 @@
                             <option value="" {% if not form.budget.value %}selected{% endif %}>Select budget category</option>
                             {% for budget in form.fields.budget.queryset %}
                                 <option value="{{ budget.id }}" {% if form.budget.value == budget.id %}selected{% endif %}>
-                                    {{ budget.category }} (Balance: ${{ budget.balance|floatformat:2 }})
+                                    {{ budget.category }} (Balance: ${{ budget.get_current_balance|floatformat:2 }})
                                 </option>
                             {% endfor %}
                         </select>

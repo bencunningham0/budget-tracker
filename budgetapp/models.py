@@ -60,109 +60,65 @@ class Budget(models.Model):
         return self.get_period_start_for_date(self.created_at.date())
 
     def get_current_balance(self):
-        # Use select_related to optimize related table lookups
-        transactions = self.transactions.select_related('recurring_transaction').all()
-        
-        # Calculate the starting budget amount for the current period
+        """Return the balance for the current period using BudgetPeriod."""
         period_start = self.get_current_period_start()
-        
-        # Convert to timezone-aware datetime for comparison
-        period_start_dt = timezone.make_aware(datetime.combine(period_start, datetime.min.time()))
-        
-        # Get transactions from this period
-        current_period_transactions = transactions.filter(date__gte=period_start_dt)
-        
-        # Calculate spent amount in current period
-        spent = sum(t.amount for t in current_period_transactions)
-        
-        # Calculate rollover amount if applicable
-        rollover_amount = 0
-        if self.rollover:
-            # Check if this is the first period
-            start_date = self.get_start_date()
-            if start_date >= period_start:
-                # If the budget was created during the current period,
-                # we shouldn't add any rollover as it's the first period
-                rollover_amount = 0
-            else:
-                # Get last period's unused funds
-                last_period_end = period_start - timedelta(days=1)
-                last_period_start = self.get_period_start_for_date(last_period_end)
-                
-                # Check if last period is valid (after start date)
-                if last_period_start < start_date:
-                    last_period_start = start_date
-                
-                # Convert to timezone-aware datetime for comparison
-                last_period_start_dt = timezone.make_aware(datetime.combine(last_period_start, datetime.min.time()))
-                
-                last_period_transactions = transactions.filter(
-                    date__gte=last_period_start_dt,
-                    date__lt=period_start_dt
-                )
-                
-                last_period_spent = sum(t.amount for t in last_period_transactions)
-                last_period_budget = self.amount
-                
-                # Calculate rollover amount
-                rollover_amount = max(0, last_period_budget - last_period_spent)
-                
-                # Apply rollover_max limit if set
-                if self.rollover_max is not None:
-                    rollover_amount = min(rollover_amount, self.rollover_max)
-        
-        # Return current balance
-        return self.amount + rollover_amount - spent
-    
-    def get_current_period_start(self):
-        today = timezone.now().date()
-        return self.get_period_start_for_date(today)
-    
-    def get_period_start_for_date(self, date):
-        if self.frequency == 'weekly':
-            # Get the Monday of the current week
-            return date - timedelta(days=date.weekday())
-        elif self.frequency == 'fortnightly':
-            # Get Monday of the current or previous week depending on if it's a budget week
-            monday = date - timedelta(days=date.weekday())
-            # Use start_date calculated from transactions
-            reference_date = self.get_start_date()
-            reference_monday = reference_date - timedelta(days=reference_date.weekday())
-            days_diff = (monday - reference_monday).days
-            weeks_diff = days_diff // 7
-            if weeks_diff % 2 == 1:  # odd number of weeks difference
-                monday = monday - timedelta(days=7)  # go back to previous week
-            return monday
-        elif self.frequency == 'monthly':
-            # Get the 1st of the current month
-            return date.replace(day=1)
-        else:  # yearly
-            # Get the 1st day of the year
-            return date.replace(month=1, day=1)
-            
-    def get_period_end_for_date(self, start_date):
-        if self.frequency == 'weekly':
-            return start_date + timedelta(days=6)
-        elif self.frequency == 'fortnightly':
-            return start_date + timedelta(days=13)
-        elif self.frequency == 'monthly':
-            # Last day of the month
-            if start_date.month == 12:
-                next_month = date(start_date.year + 1, 1, 1)
-            else:
-                next_month = date(start_date.year, start_date.month + 1, 1)
-            return next_month - timedelta(days=1)
-        else:  # yearly
-            # Last day of the year
-            return date(start_date.year, 12, 31)
-            
-    
-    def get_historical_periods(self, num_periods=6):
-        """Return data about previous budget periods"""
-        # Prefetch all transactions to avoid N+1 queries
+        period = self.periods.filter(start_date=period_start).first()
+        if period:
+            return period.budget_amount - period.total_spent
+        # fallback to calculation if missing
+        info = self.get_current_period_info(force_calc=True)
+        return info['balance']
+
+    def get_current_period_info(self, force_calc=False):
+        """Get info for the current period, using BudgetPeriod if available."""
+        period_start = self.get_current_period_start()
+        if not force_calc:
+            period = self.periods.filter(start_date=period_start).first()
+            if period:
+                return {
+                    'start_date': period.start_date,
+                    'end_date': period.end_date,
+                    'total_spent': period.total_spent,
+                    'balance': period.budget_amount - period.total_spent,
+                    'budget_amount': period.budget_amount,
+                    'base_budget': self.amount,
+                    'rollover_amount': period.budget_amount - self.amount if period.budget_amount > self.amount else 0,
+                    'difference': period.difference,
+                    'is_over_budget': period.is_over_budget,
+                    'is_current': period.is_current
+                }
+        # fallback to calculation if missing or forced
+        period = self._get_period_data(period_start)
+        return period
+
+    def get_historical_periods(self, num_periods=6, use_db=True):
+        """Return previous budget periods, using BudgetPeriod if available."""
+        if use_db:
+            periods = list(self.periods.order_by('-start_date')[:num_periods])
+            if periods:
+                # Convert to dicts for compatibility
+                return [
+                    {
+                        'start_date': p.start_date,
+                        'end_date': p.end_date,
+                        'total_spent': p.total_spent,
+                        'balance': p.budget_amount - p.total_spent,
+                        'budget_amount': p.budget_amount,
+                        'base_budget': self.amount,
+                        'rollover_amount': p.budget_amount - self.amount if p.budget_amount > self.amount else 0,
+                        'difference': p.difference,
+                        'is_over_budget': p.is_over_budget,
+                        'is_current': p.is_current
+                    }
+                    for p in periods
+                ]
+        # fallback to calculation if missing
+        return self._get_historical_periods_calc(num_periods)
+
+    def _get_historical_periods_calc(self, num_periods=6):
+        # original calculation logic
         transactions = self.transactions.all()
-        transactions = list(transactions)  # Evaluate queryset once
-        
+        transactions = list(transactions)
         periods = []
         current_period_start = self.get_current_period_start()
         
@@ -263,43 +219,96 @@ class Budget(models.Model):
             'is_current': is_current
         }
 
-    def get_current_period_info(self):
-        """Get information about the current budget period including balance, amount spent, and budget amount"""
-        # Get the current period dates
-        period_start = self.get_current_period_start()
-        budget = self._get_period_data(period_start)
-        return budget
-
-    def get_weekly_amount(self):
-        """Get the weekly equivalent of the budget amount"""
-        if self.frequency == 'weekly':
-            return self.amount
-        elif self.frequency == 'fortnightly':
-            return self.amount / Decimal('2')
-        elif self.frequency == 'monthly':
-            return self.amount * Decimal('12') / Decimal('52')
-        else:  # yearly
-            return self.amount / Decimal('52')
-
-    def get_avg_weekly_spent(self):
-        """Calculate the average weekly spend since the first transaction"""
-        # Get the first transaction date
-        first_transaction = self.transactions.order_by('date').first()
-        if not first_transaction:
-            return Decimal('0')
-            
-        # Get all transactions
-        all_transactions = self.transactions.all()
-        total_spent = sum(t.amount for t in all_transactions)
-        
-        # Calculate number of weeks
+    def get_current_period_start(self):
         today = timezone.now().date()
-        first_date = first_transaction.date.date()
-        days_diff = (today - first_date).days
-        weeks = max(Decimal(str(days_diff / 7)), Decimal('1'))  # Use at least 1 week to avoid division by zero
+        return self.get_period_start_for_date(today)
+    
+    def get_period_start_for_date(self, date):
+        if self.frequency == 'weekly':
+            # Get the Monday of the current week
+            return date - timedelta(days=date.weekday())
+        elif self.frequency == 'fortnightly':
+            # Get Monday of the current or previous week depending on if it's a budget week
+            monday = date - timedelta(days=date.weekday())
+            # Use start_date calculated from transactions
+            reference_date = self.get_start_date()
+            reference_monday = reference_date - timedelta(days=reference_date.weekday())
+            days_diff = (monday - reference_monday).days
+            weeks_diff = days_diff // 7
+            if weeks_diff % 2 == 1:  # odd number of weeks difference
+                monday = monday - timedelta(days=7)  # go back to previous week
+            return monday
+        elif self.frequency == 'monthly':
+            # Get the 1st of the current month
+            return date.replace(day=1)
+        else:  # yearly
+            # Get the 1st day of the year
+            return date.replace(month=1, day=1)
+            
+    def get_period_end_for_date(self, start_date):
+        if self.frequency == 'weekly':
+            return start_date + timedelta(days=6)
+        elif self.frequency == 'fortnightly':
+            return start_date + timedelta(days=13)
+        elif self.frequency == 'monthly':
+            # Last day of the month
+            if start_date.month == 12:
+                next_month = date(start_date.year + 1, 1, 1)
+            else:
+                next_month = date(start_date.year, start_date.month + 1, 1)
+            return next_month - timedelta(days=1)
+        else:  # yearly
+            # Last day of the year
+            return date(start_date.year, 12, 31)
+            
+    
+    def get_historical_periods(self, num_periods=6, use_db=True):
+        """Return previous budget periods, using BudgetPeriod if available."""
+        if use_db:
+            periods = list(self.periods.order_by('-start_date')[:num_periods])
+            if periods:
+                # Convert to dicts for compatibility
+                return [
+                    {
+                        'start_date': p.start_date,
+                        'end_date': p.end_date,
+                        'total_spent': p.total_spent,
+                        'balance': p.budget_amount - p.total_spent,
+                        'budget_amount': p.budget_amount,
+                        'base_budget': self.amount,
+                        'rollover_amount': p.budget_amount - self.amount if p.budget_amount > self.amount else 0,
+                        'difference': p.difference,
+                        'is_over_budget': p.is_over_budget,
+                        'is_current': p.is_current
+                    }
+                    for p in periods
+                ]
+        # fallback to calculation if missing
+        return self._get_historical_periods_calc(num_periods)
+
+    def _get_historical_periods_calc(self, num_periods=6):
+        # original calculation logic
+        transactions = self.transactions.all()
+        transactions = list(transactions)
+        periods = []
+        current_period_start = self.get_current_period_start()
         
-        # Return weekly average
-        return total_spent / weeks
+        # Start with current period
+        periods.append(self._get_period_data(current_period_start, transactions))
+        
+        # Add previous periods
+        for i in range(1, num_periods):
+            # Get the end date of the previous period
+            prev_period_end = self._get_previous_period_end(periods[-1]['start_date'])
+            prev_period_start = self.get_period_start_for_date(prev_period_end)
+            
+            # Stop if we reach start date
+            if prev_period_start < self.get_start_date():
+                break
+                
+            periods.append(self._get_period_data(prev_period_start, transactions))
+            
+        return periods
 
 class Income(models.Model):
     FREQUENCY_CHOICES = [
