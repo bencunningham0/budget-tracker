@@ -142,58 +142,34 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Include Chart.js from CDN -->
+{% if income_transactions %}
+<script id="income-chart-data" type="application/json">
+[
+{% for transaction in income_transactions %}
+    {
+        "date": "{{ transaction.date|date:'Y-m-d' }}",
+        "amount": {{ transaction.amount }}
+    }{% if not forloop.last %},{% endif %}
+{% endfor %}
+]
+</script>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Exit early if no chart container or no transactions
-    if (!document.getElementById('incomeChart') || 
-        {% if income_transactions %}false{% else %}true{% endif %}) {
+    var chartEl = document.getElementById('incomeChart');
+    var dataEl = document.getElementById('income-chart-data');
+    if (!chartEl || !dataEl) {
         return;
     }
-    
-    const cacheKey = 'income_chart_{{ income.id }}';
-    const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
-    const cacheVersion = '{{ income.income_transactions.count }}'; // Use transaction count as version
-    
-    // Try to get cached data
-    const cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-        try {
-            const { data, timestamp, version } = JSON.parse(cachedData);
-            // Only use cache if not expired and version matches (no new transactions)
-            if (timestamp && 
-                (Date.now() - timestamp) < cacheTimeout && 
-                version === cacheVersion) {
-                createChart(data);
-                return;
-            }
-        } catch (e) {
-            // If there's any error parsing the cached data, ignore it
-            console.error('Error parsing cached chart data:', e);
-        }
-    }
-    
-    // Clear any invalid cache
-    localStorage.removeItem(cacheKey);
-    
-    // Group income transactions by month
-    const transactions = [
-        {% for transaction in income_transactions %}
-            {
-                date: new Date("{{ transaction.date|date:'Y-m-d' }}"),
-                amount: {{ transaction.amount }}
-            }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-    ];
-    
+    var transactions = JSON.parse(dataEl.textContent);
     // Group by month and year
     const monthlyData = {};
     transactions.forEach(transaction => {
-        const year = transaction.date.getFullYear();
-        const month = transaction.date.getMonth();
+        const dateObj = new Date(transaction.date);
+        const year = dateObj.getFullYear();
+        const month = dateObj.getMonth();
         const key = `${year}-${month.toString().padStart(2, '0')}`;
-        
         if (!monthlyData[key]) {
             monthlyData[key] = {
                 label: new Date(year, month, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
@@ -203,25 +179,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         monthlyData[key].amount += transaction.amount;
     });
-    
     // Convert to array and sort chronologically
     const monthlyArray = Object.values(monthlyData).sort((a, b) => a.date - b.date);
-    
-    // Cache the data with version information
-    localStorage.setItem(cacheKey, JSON.stringify({
-        data: monthlyArray,
-        timestamp: Date.now(),
-        version: cacheVersion
-    }));
-    
-    // Create the chart
     createChart(monthlyArray);
 });
 
 function createChart(monthlyData) {
     // Only show the last 12 months if there are more than 12 data points
     const limitedData = monthlyData.slice(-12);
-    
     // Create the chart
     const ctx = document.getElementById('incomeChart').getContext('2d');
     new Chart(ctx, {

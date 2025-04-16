@@ -175,69 +175,35 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Include Chart.js from CDN -->
+{% if historical_periods %}
+<script id="periods-data" type="application/json">
+[
+{% for period in historical_periods %}
+    {
+        "label": "{{ period.start_date|date:'M d' }} - {{ period.end_date|date:'M d' }}",
+        "budget": {{ period.budget_amount }},
+        "spent": {{ period.total_spent }},
+        "isCurrent": {{ period.is_current|yesno:'true,false' }}
+    }{% if not forloop.last %},{% endif %}
+{% endfor %}
+]
+</script>
+{% endif %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Exit early if no chart container or no historical periods
-    if (!document.getElementById('budgetVsActualsChart') || 
-        {% if historical_periods %}false{% else %}true{% endif %}) {
+    var chartEl = document.getElementById('budgetVsActualsChart');
+    var periodsDataEl = document.getElementById('periods-data');
+    if (!chartEl || !periodsDataEl) {
         return;
     }
-    
-    const cacheKey = 'budget_chart_{{ budget.id }}';
-    const cacheTimeout = 5 * 60 * 1000; // 5 minutes in milliseconds
-    // Use transaction counts as version to invalidate cache when transactions change
-    const cacheVersion = '{{ transactions.count }}';
-    
-    // Try to get cached data
-    const cachedData = localStorage.getItem(cacheKey);
-    if (cachedData) {
-        try {
-            const { data, timestamp, version } = JSON.parse(cachedData);
-            // Only use cache if not expired and version matches (no new transactions)
-            if (timestamp && 
-                (Date.now() - timestamp) < cacheTimeout && 
-                version === cacheVersion) {
-                createChart(data);
-                return;
-            }
-        } catch (e) {
-            // If there's any error parsing the cached data, ignore it
-            console.error('Error parsing cached chart data:', e);
-        }
-    }
-    
-    // Clear any invalid cache
-    localStorage.removeItem(cacheKey);
-    
-    // Get data from the historical periods
-    const periods = [
-        {% for period in historical_periods %}
-            {
-                label: "{{ period.start_date|date:'M d' }} - {{ period.end_date|date:'M d' }}",
-                budget: {{ period.budget_amount }},
-                spent: {{ period.total_spent }},
-                isCurrent: {% if period.is_current %}true{% else %}false{% endif %}
-            }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-    ];
-    
-    // Cache the data with version information
-    localStorage.setItem(cacheKey, JSON.stringify({
-        data: periods,
-        timestamp: Date.now(),
-        version: cacheVersion
-    }));
-    
-    // Create the chart
+    var periods = JSON.parse(periodsDataEl.textContent);
     createChart(periods);
 });
 
 function createChart(periods) {
     // Reverse the periods so they're shown chronologically from left to right
     const sortedPeriods = [...periods].reverse().slice(0, 12);
-    
     // Create the chart
     const ctx = document.getElementById('budgetVsActualsChart').getContext('2d');
     new Chart(ctx, {
