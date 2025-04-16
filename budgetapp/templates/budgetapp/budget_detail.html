@@ -124,11 +124,17 @@
                       <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
                     {% endif %}
                     {% for num in transactions.paginator.page_range %}
-                      {% if num > transactions.number|add:'-5' and num < transactions.number|add:'5' %}
+                      {% if num == 1 or num == transactions.paginator.num_pages or (num >= transactions.number|add:'-2' and num <= transactions.number|add:'2') %}
+                        {% if num > 1 and num == transactions.number|add:'-2' and num != 2 %}
+                          <li class="page-item disabled"><span class="page-link">…</span></li>
+                        {% endif %}
                         {% if transactions.number == num %}
                           <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                         {% else %}
-                          <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}">{{ num }}</a></li>
+                          <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                        {% if num < transactions.paginator.num_pages and num == transactions.number|add:'2' and num != transactions.paginator.num_pages|add:'-1' %}
+                          <li class="page-item disabled"><span class="page-link">…</span></li>
                         {% endif %}
                       {% endif %}
                     {% endfor %}
