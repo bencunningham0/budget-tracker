@@ -134,17 +134,11 @@ def dashboard(request):
     if dashboard_data is None:
         # Prefetch related data to reduce queries
         budgets = Budget.objects.filter(user=user).prefetch_related(
-            Prefetch('transactions', 
-                    queryset=Transaction.objects.select_related('recurring_transaction'))
+            Prefetch('transactions', queryset=Transaction.objects.select_related('recurring_transaction'))
         )
-        incomes = Income.objects.filter(user=user).prefetch_related(
-            'income_transactions'
-        )
-        
-        # Process any pending recurring transactions
+        incomes = Income.objects.filter(user=user).prefetch_related('income_transactions')
         process_recurring_transactions(user)
         
-        # Calculate total budget spending and remaining
         budget_data = []
         total_budget = 0
         total_spent = 0
@@ -155,8 +149,8 @@ def dashboard(request):
         for budget in budgets:
             period_info = budget.get_current_period_info()
             weekly_amount = budget.get_weekly_amount()
-            avg_weekly_spent = budget.get_avg_weekly_spent()
-            
+            # Use precomputed fields
+            avg_weekly_spent = budget.avg_weekly_spent
             budget_data.append({
                 'budget': budget,
                 'balance': period_info['balance'],
@@ -171,22 +165,15 @@ def dashboard(request):
             weekly_budgeted += weekly_amount
             weekly_spent += avg_weekly_spent
         
-        # Calculate total income and weekly averages
         total_weekly_income = sum(income.get_weekly_amount() for income in incomes)
         total_monthly_income = total_weekly_income * Decimal('52') / Decimal('12')
         total_yearly_income = total_weekly_income * Decimal('52')
         
-        # Get variable income data
         variable_incomes = [income for income in incomes if income.is_variable]
         variable_income_data = []
-        
         for income in variable_incomes:
             recent_period = timezone.now() - timezone.timedelta(days=30)
-            income_transactions = IncomeTransaction.objects.filter(
-                income=income,
-                date__gte=recent_period
-            ).order_by('-date')
-            
+            income_transactions = income.income_transactions.filter(date__gte=recent_period).order_by('-date')
             variable_income_data.append({
                 'income': income,
                 'recent_transactions': income_transactions[:5],
@@ -195,21 +182,9 @@ def dashboard(request):
                 'difference': income.get_current_period_actual_income() - income.amount
             })
         
-        # Get recent transactions with a single query
-        recent_transactions = Transaction.objects.filter(
-            user=user
-        ).select_related('budget').order_by('-date')[:10]
-        
-        # Get recent income transactions
-        recent_income_transactions = IncomeTransaction.objects.filter(
-            user=user
-        ).select_related('income').order_by('-date')[:5]
-        
-        # Get active recurring transactions
-        recurring_transactions = RecurringTransaction.objects.filter(
-            user=user,
-            active=True
-        ).select_related('budget').order_by('start_date')
+        recent_transactions = Transaction.objects.filter(user=user).select_related('budget').order_by('-date')[:10]
+        recent_income_transactions = IncomeTransaction.objects.filter(user=user).select_related('income').order_by('-date')[:5]
+        recurring_transactions = RecurringTransaction.objects.filter(user=user, active=True).select_related('budget').order_by('start_date')
         
         dashboard_data = {
             'budget_data': budget_data,
@@ -229,10 +204,7 @@ def dashboard(request):
             'recent_income_transactions': recent_income_transactions,
             'has_variable_income': any(income.is_variable for income in incomes),
         }
-        
-        # Cache for 5 minutes
         cache.set(cache_key, dashboard_data, 300)
-    
     return render(request, 'budgetapp/dashboard.html', dashboard_data)
 
 @login_required
@@ -291,28 +263,17 @@ def budget_delete(request, pk):
 @login_required
 def budget_detail(request, pk):
     budget = get_object_or_404(Budget, pk=pk, user=request.user)
-    
-    # Get page numbers from request
     transactions_page = request.GET.get('transactions_page', 1)
     periods_page = request.GET.get('periods_page', 1)
-    
-    # Clear the cache when pagination is requested to ensure fresh data
     if 'transactions_page' in request.GET or 'periods_page' in request.GET:
         cache.delete(f'budget_detail_{budget.id}')
-    
     cache_key = f'budget_detail_{budget.id}'
     cached_data = cache.get(cache_key)
-    
     if cached_data is None:
-        # Get all data
-        transactions = Transaction.objects.filter(
-            budget=budget
-        ).select_related('recurring_transaction').order_by('-date')
-        
+        transactions = Transaction.objects.filter(budget=budget).select_related('recurring_transaction').order_by('-date')
         period_info = budget.get_current_period_info()
-        all_historical_periods = budget.get_historical_periods(num_periods=52)
-        
-        # Store the base data in cache
+        # Use precomputed historical_periods
+        all_historical_periods = budget.historical_periods or []
         cached_data = {
             'transactions': transactions,
             'all_historical_periods': all_historical_periods,
@@ -320,11 +281,7 @@ def budget_detail(request, pk):
             'spent': period_info['total_spent'],
             'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
         }
-        
-        # Cache for 5 minutes
         cache.set(cache_key, cached_data, 300)
-    
-    # Paginate transactions - 10 per page
     transactions_paginator = Paginator(cached_data['transactions'], 10)
     try:
         paginated_transactions = transactions_paginator.page(transactions_page)
@@ -332,8 +289,6 @@ def budget_detail(request, pk):
         paginated_transactions = transactions_paginator.page(1)
     except EmptyPage:
         paginated_transactions = transactions_paginator.page(transactions_paginator.num_pages)
-    
-    # Paginate historical periods - 10 per page
     periods_paginator = Paginator(cached_data['all_historical_periods'], 10)
     try:
         paginated_periods = periods_paginator.page(periods_page)
@@ -341,7 +296,6 @@ def budget_detail(request, pk):
         paginated_periods = periods_paginator.page(1)
     except EmptyPage:
         paginated_periods = periods_paginator.page(periods_paginator.num_pages)
-    
     context = {
         'budget': budget,
         'transactions': paginated_transactions,
@@ -349,11 +303,10 @@ def budget_detail(request, pk):
         'spent': cached_data['spent'],
         'percentage': cached_data['percentage'],
         'historical_periods': paginated_periods,
-        'all_historical_periods': cached_data['all_historical_periods'],  # Used for chart data (not paginated)
-        'periods_page': int(periods_page),  # Pass current page for URL generation
-        'transactions_page': int(transactions_page),  # Pass current page for URL generation
+        'all_historical_periods': cached_data['all_historical_periods'],
+        'periods_page': int(periods_page),
+        'transactions_page': int(transactions_page),
     }
-    
     return render(request, 'budgetapp/budget_detail.html', context)
 
 @login_required
@@ -707,39 +660,26 @@ def income_detail(request, pk):
     income = get_object_or_404(Income, pk=pk, user=request.user)
     cache_key = f'income_detail_{income.id}'
     context = cache.get(cache_key)
-    
     if context is None:
-        income_transactions = IncomeTransaction.objects.filter(
-            income=income
-        ).order_by('-date')
-        
-        # Calculate stats for this income source
+        income_transactions = IncomeTransaction.objects.filter(income=income).order_by('-date')
         current_period_income = income.get_current_period_actual_income()
         expected_income = income.amount
         difference = current_period_income - expected_income if income.is_variable else 0
-        
-        # Calculate averages
-        last_30_days = timezone.now() - timezone.timedelta(days=30)
-        last_90_days = timezone.now() - timezone.timedelta(days=90)
-        
-        transactions_30d = income_transactions.filter(date__gte=last_30_days)
-        transactions_90d = income_transactions.filter(date__gte=last_90_days)
-        
-        avg_30d = sum(t.amount for t in transactions_30d) / 30 * 7 if transactions_30d else 0  # Weekly average
-        avg_90d = sum(t.amount for t in transactions_90d) / 90 * 7 if transactions_90d else 0  # Weekly average
-        
+        # Use precomputed fields
+        avg_30d = income.avg_30d
+        avg_90d = income.avg_90d
+        total_income = income.total_income
         context = {
             'income': income,
-            'income_transactions': income_transactions[:20],  # Limit to 20 most recent
+            'income_transactions': income_transactions[:20],
             'current_period_income': current_period_income,
             'expected_income': expected_income,
             'difference': difference,
             'avg_30d': avg_30d,
             'avg_90d': avg_90d,
-            'total_income': sum(t.amount for t in income_transactions),
+            'total_income': total_income,
             'transaction_count': income_transactions.count()
         }
-        
         # Cache for 5 minutes
         cache.set(cache_key, context, 300)
     

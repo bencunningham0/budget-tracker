@@ -1,8 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+import json
 from datetime import timedelta, datetime, date
 from decimal import Decimal
 import pytz
@@ -37,6 +38,11 @@ class Budget(models.Model):
     rollover_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Precomputed fields for performance
+    total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    avg_weekly_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Use JSONField if available, else TextField for JSON-serialized data
+    historical_periods = models.JSONField(default=list, blank=True)  # If not available, use TextField
     
     class Meta:
         indexes = [
@@ -313,6 +319,12 @@ class Income(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_variable = models.BooleanField(default=False, db_index=True)
+    # Precomputed fields for performance
+    total_income = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    avg_30d = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    avg_90d = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # Use JSONField if available, else TextField for JSON-serialized data
+    historical_incomes = models.JSONField(default=list, blank=True)  # If not available, use TextField
     
     class Meta:
         indexes = [
@@ -546,3 +558,49 @@ class RecurringTransaction(models.Model):
                 return next_month - timedelta(days=1)
         elif self.frequency == 'yearly':
             return from_date.replace(year=from_date.year + 1)
+
+def update_budget_aggregates(budget):
+    """Update precomputed fields for a Budget instance."""
+    transactions = budget.transactions.all()
+    total_spent = sum(t.amount for t in transactions)
+    avg_weekly_spent = budget.get_avg_weekly_spent()
+    # Store up to 52 historical periods
+    historical_periods = budget.get_historical_periods(num_periods=52)
+    budget.total_spent = total_spent
+    budget.avg_weekly_spent = avg_weekly_spent
+    budget.historical_periods = historical_periods
+    budget.save(update_fields=["total_spent", "avg_weekly_spent", "historical_periods"])
+
+def update_income_aggregates(income):
+    """Update precomputed fields for an Income instance."""
+    transactions = income.income_transactions.all()
+    total_income = sum(t.amount for t in transactions)
+    now = timezone.now()
+    last_30_days = now - timedelta(days=30)
+    last_90_days = now - timedelta(days=90)
+    transactions_30d = transactions.filter(date__gte=last_30_days)
+    transactions_90d = transactions.filter(date__gte=last_90_days)
+    avg_30d = sum(t.amount for t in transactions_30d) / Decimal('30') * Decimal('7') if transactions_30d else Decimal('0')
+    avg_90d = sum(t.amount for t in transactions_90d) / Decimal('90') * Decimal('7') if transactions_90d else Decimal('0')
+    income.total_income = total_income
+    income.avg_30d = avg_30d
+    income.avg_90d = avg_90d
+    income.save(update_fields=["total_income", "avg_30d", "avg_90d"])
+
+# Signals for Transaction
+@receiver(post_save, sender='budgetapp.Transaction')
+def transaction_post_save(sender, instance, **kwargs):
+    update_budget_aggregates(instance.budget)
+
+@receiver(post_delete, sender='budgetapp.Transaction')
+def transaction_post_delete(sender, instance, **kwargs):
+    update_budget_aggregates(instance.budget)
+
+# Signals for IncomeTransaction
+@receiver(post_save, sender='budgetapp.IncomeTransaction')
+def incometransaction_post_save(sender, instance, **kwargs):
+    update_income_aggregates(instance.income)
+
+@receiver(post_delete, sender='budgetapp.IncomeTransaction')
+def incometransaction_post_delete(sender, instance, **kwargs):
+    update_income_aggregates(instance.income)
