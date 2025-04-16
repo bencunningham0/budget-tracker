@@ -114,25 +114,27 @@
                     </table>
                 </div>
                 {% if transactions.has_other_pages %}
-                <nav>
+                <nav aria-label="Transaction pagination">
                   <ul class="pagination justify-content-center">
                     {% if transactions.has_previous %}
                       <li class="page-item">
-                        <a class="page-link" href="?transactions_page={{ transactions.previous_page_number }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">&laquo;</a>
+                        <a class="page-link" href="?transactions_page={{ transactions.previous_page_number }}">&laquo;</a>
                       </li>
                     {% else %}
                       <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
                     {% endif %}
                     {% for num in transactions.paginator.page_range %}
-                      {% if transactions.number == num %}
-                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                      {% else %}
-                        <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">{{ num }}</a></li>
+                      {% if num > transactions.number|add:'-5' and num < transactions.number|add:'5' %}
+                        {% if transactions.number == num %}
+                          <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% else %}
+                          <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}">{{ num }}</a></li>
+                        {% endif %}
                       {% endif %}
                     {% endfor %}
                     {% if transactions.has_next %}
                       <li class="page-item">
-                        <a class="page-link" href="?transactions_page={{ transactions.next_page_number }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">&raquo;</a>
+                        <a class="page-link" href="?transactions_page={{ transactions.next_page_number }}">&raquo;</a>
                       </li>
                     {% else %}
                       <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
