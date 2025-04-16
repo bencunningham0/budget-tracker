@@ -567,11 +567,8 @@ def update_budget_aggregates(budget):
     avg_weekly_spent = budget.get_avg_weekly_spent()
     # Store up to 52 historical periods
     historical_periods = budget.get_historical_periods(num_periods=52)
-    # Convert all date/datetime objects to isoformat for JSONField
-    for period in historical_periods:
-        for k, v in period.items():
-            if isinstance(v, (datetime, date)):
-                period[k] = v.isoformat()
+    # Use DjangoJSONEncoder to ensure all values are serializable
+    historical_periods = json.loads(json.dumps(historical_periods, cls=DjangoJSONEncoder))
     budget.total_spent = total_spent
     budget.avg_weekly_spent = avg_weekly_spent
     budget.historical_periods = historical_periods
