@@ -562,23 +562,16 @@ class RecurringTransaction(models.Model):
             return from_date.replace(year=from_date.year + 1)
 
 def update_budget_aggregates(budget):
-    """Update precomputed fields for a Budget instance."""
     transactions = budget.transactions.all()
     total_spent = sum(t.amount for t in transactions)
     avg_weekly_spent = budget.get_avg_weekly_spent()
     # Store up to 52 historical periods
     historical_periods = budget.get_historical_periods(num_periods=52)
-    # Ensure all date/datetime objects are JSON serializable
-    if hasattr(budget._meta.get_field('historical_periods'), 'get_prep_value'):
-        # If using JSONField, ensure serialization
-        try:
-            json.dumps(historical_periods, cls=DjangoJSONEncoder)
-        except TypeError:
-            # Convert all date/datetime to isoformat
-            for period in historical_periods:
-                for k, v in period.items():
-                    if hasattr(v, 'isoformat'):
-                        period[k] = v.isoformat()
+    # Convert all date/datetime objects to isoformat for JSONField
+    for period in historical_periods:
+        for k, v in period.items():
+            if isinstance(v, (datetime, date)):
+                period[k] = v.isoformat()
     budget.total_spent = total_spent
     budget.avg_weekly_spent = avg_weekly_spent
     budget.historical_periods = historical_periods
