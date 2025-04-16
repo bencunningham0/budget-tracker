@@ -113,6 +113,33 @@
                         </tbody>
                     </table>
                 </div>
+                {% if transactions.has_other_pages %}
+                <nav>
+                  <ul class="pagination justify-content-center">
+                    {% if transactions.has_previous %}
+                      <li class="page-item">
+                        <a class="page-link" href="?transactions_page={{ transactions.previous_page_number }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">&laquo;</a>
+                      </li>
+                    {% else %}
+                      <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                    {% endif %}
+                    {% for num in transactions.paginator.page_range %}
+                      {% if transactions.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                      {% else %}
+                        <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">{{ num }}</a></li>
+                      {% endif %}
+                    {% endfor %}
+                    {% if transactions.has_next %}
+                      <li class="page-item">
+                        <a class="page-link" href="?transactions_page={{ transactions.next_page_number }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">&raquo;</a>
+                      </li>
+                    {% else %}
+                      <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {% endif %}
+                  </ul>
+                </nav>
+                {% endif %}
             </div>
         </div>
         
@@ -167,7 +194,33 @@
                         </tbody>
                     </table>
                 </div>
-                
+                {% if historical_periods.has_other_pages %}
+                <nav>
+                  <ul class="pagination justify-content-center">
+                    {% if historical_periods.has_previous %}
+                      <li class="page-item">
+                        <a class="page-link" href="?periods_page={{ historical_periods.previous_page_number }}{% if transactions_page %}&transactions_page={{ transactions_page }}{% endif %}">&laquo;</a>
+                      </li>
+                    {% else %}
+                      <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+                    {% endif %}
+                    {% for num in historical_periods.paginator.page_range %}
+                      {% if historical_periods.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                      {% else %}
+                        <li class="page-item"><a class="page-link" href="?periods_page={{ num }}{% if transactions_page %}&transactions_page={{ transactions_page }}{% endif %}">{{ num }}</a></li>
+                      {% endif %}
+                    {% endfor %}
+                    {% if historical_periods.has_next %}
+                      <li class="page-item">
+                        <a class="page-link" href="?periods_page={{ historical_periods.next_page_number }}{% if transactions_page %}&transactions_page={{ transactions_page }}{% endif %}">&raquo;</a>
+                      </li>
+                    {% else %}
+                      <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+                    {% endif %}
+                  </ul>
+                </nav>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -178,7 +231,7 @@
 {% if historical_periods %}
 <script id="periods-data" type="application/json">
 [
-{% for period in historical_periods %}
+{% for period in historical_periods.object_list|default:historical_periods %}
     {
         "label": "{{ period.start_date|date:'M d' }} - {{ period.end_date|date:'M d' }}",
         "budget": {{ period.budget_amount }},
@@ -202,25 +255,25 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function createChart(periods) {
-    // Reverse the periods so they're shown chronologically from left to right
-    const sortedPeriods = [...periods].reverse().slice(0, 12);
+    // Show the most recent 12 periods, in chronological order
+    const last12 = periods.slice(-12);
     // Create the chart
     const ctx = document.getElementById('budgetVsActualsChart').getContext('2d');
     new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: sortedPeriods.map(period => period.label),
+            labels: last12.map(period => period.label),
             datasets: [
                 {
                     label: 'Budget',
-                    data: sortedPeriods.map(period => period.budget),
+                    data: last12.map(period => period.budget),
                     backgroundColor: 'rgba(54, 162, 235, 0.7)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 },
                 {
                     label: 'Actual',
-                    data: sortedPeriods.map(period => period.spent),
+                    data: last12.map(period => period.spent),
                     backgroundColor: 'rgba(255, 99, 132, 0.7)',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 1
