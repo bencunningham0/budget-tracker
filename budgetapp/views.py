@@ -296,16 +296,36 @@ def budget_detail(request, pk):
     transactions_page = request.GET.get('transactions_page', 1)
     periods_page = request.GET.get('periods_page', 1)
     
-    # Get all data
-    transactions = Transaction.objects.filter(
-        budget=budget
-    ).select_related('recurring_transaction').order_by('-date')
+    # Clear the cache when pagination is requested to ensure fresh data
+    if 'transactions_page' in request.GET or 'periods_page' in request.GET:
+        cache.delete(f'budget_detail_{budget.id}')
     
-    period_info = budget.get_current_period_info()
-    all_historical_periods = budget.get_historical_periods(num_periods=52)
+    cache_key = f'budget_detail_{budget.id}'
+    cached_data = cache.get(cache_key)
+    
+    if cached_data is None:
+        # Get all data
+        transactions = Transaction.objects.filter(
+            budget=budget
+        ).select_related('recurring_transaction').order_by('-date')
+        
+        period_info = budget.get_current_period_info()
+        all_historical_periods = budget.get_historical_periods(num_periods=52)
+        
+        # Store the base data in cache
+        cached_data = {
+            'transactions': transactions,
+            'all_historical_periods': all_historical_periods,
+            'balance': period_info['balance'],
+            'spent': period_info['total_spent'],
+            'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
+        }
+        
+        # Cache for 5 minutes
+        cache.set(cache_key, cached_data, 300)
     
     # Paginate transactions - 10 per page
-    transactions_paginator = Paginator(transactions, 10)
+    transactions_paginator = Paginator(cached_data['transactions'], 10)
     try:
         paginated_transactions = transactions_paginator.page(transactions_page)
     except PageNotAnInteger:
@@ -314,7 +334,7 @@ def budget_detail(request, pk):
         paginated_transactions = transactions_paginator.page(transactions_paginator.num_pages)
     
     # Paginate historical periods - 10 per page
-    periods_paginator = Paginator(all_historical_periods, 10)
+    periods_paginator = Paginator(cached_data['all_historical_periods'], 10)
     try:
         paginated_periods = periods_paginator.page(periods_page)
     except PageNotAnInteger:
@@ -325,13 +345,13 @@ def budget_detail(request, pk):
     context = {
         'budget': budget,
         'transactions': paginated_transactions,
-        'balance': period_info['balance'],
-        'spent': period_info['total_spent'],
-        'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
+        'balance': cached_data['balance'],
+        'spent': cached_data['spent'],
+        'percentage': cached_data['percentage'],
         'historical_periods': paginated_periods,
-        'all_historical_periods': all_historical_periods,  # Used for chart data (not paginated)
-        'periods_page': periods_page,  # Pass current page for URL generation
-        'transactions_page': transactions_page,  # Pass current page for URL generation
+        'all_historical_periods': cached_data['all_historical_periods'],  # Used for chart data (not paginated)
+        'periods_page': int(periods_page),  # Pass current page for URL generation
+        'transactions_page': int(transactions_page),  # Pass current page for URL generation
     }
     
     return render(request, 'budgetapp/budget_detail.html', context)
