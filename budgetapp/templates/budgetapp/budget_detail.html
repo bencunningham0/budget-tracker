@@ -243,7 +243,7 @@
 {% if all_historical_periods %}
 <script id="periods-data" type="application/json">
 [
-{% for period in all_historical_periods|slice:"-10:" %}
+{% for period in all_historical_periods|slice:"-8:" %}
     {
         "label": "{{ period.start_date|date:'M d' }} - {{ period.end_date|date:'M d' }}",
         "budget": {{ period.budget_amount }},

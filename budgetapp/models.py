@@ -31,7 +31,6 @@ class Budget(models.Model):
         ('monthly', 'Monthly'),
         ('yearly', 'Yearly'),
     ]
-    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets', db_index=True)
     category = models.CharField(max_length=100, db_index=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -40,11 +39,8 @@ class Budget(models.Model):
     rollover_max = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    # Precomputed fields for performance
     total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     avg_weekly_spent = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    # Use JSONField if available, else TextField for JSON-serialized data
-    historical_periods = models.JSONField(default=list, blank=True)  # If not available, use TextField
     
     class Meta:
         indexes = [
@@ -565,14 +561,26 @@ def update_budget_aggregates(budget):
     transactions = budget.transactions.all()
     total_spent = sum(t.amount for t in transactions)
     avg_weekly_spent = budget.get_avg_weekly_spent()
-    # Store up to 52 historical periods
-    historical_periods = budget.get_historical_periods(num_periods=52)
-    # Use DjangoJSONEncoder to ensure all values are serializable
-    historical_periods = json.loads(json.dumps(historical_periods, cls=DjangoJSONEncoder))
     budget.total_spent = total_spent
     budget.avg_weekly_spent = avg_weekly_spent
-    budget.historical_periods = historical_periods
-    budget.save(update_fields=["total_spent", "avg_weekly_spent", "historical_periods"])
+    budget.save(update_fields=["total_spent", "avg_weekly_spent"])
+    # Update BudgetPeriod records
+    from .models import BudgetPeriod
+    # Remove old periods for this budget
+    BudgetPeriod.objects.filter(budget=budget).delete()
+    # Recompute and store up to 52 periods
+    periods = budget.get_historical_periods(num_periods=52)
+    for period in periods:
+        BudgetPeriod.objects.create(
+            budget=budget,
+            start_date=period['start_date'],
+            end_date=period['end_date'],
+            budget_amount=period['budget_amount'],
+            total_spent=period['total_spent'],
+            difference=period['difference'],
+            is_current=period['is_current'],
+            is_over_budget=period['is_over_budget'],
+        )
 
 def update_budget_aggregates_async(budget):
     Thread(target=update_budget_aggregates, args=(budget,)).start()
