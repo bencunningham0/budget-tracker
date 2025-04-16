@@ -13,6 +13,7 @@ from .forms import (
     RecurringTransactionForm, IncomeTransactionForm, UserSettingsForm, ProfileSettingsForm
 )
 from .models import Budget, Income, Transaction, RecurringTransaction, IncomeTransaction, UserProfile
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 # Cache utility functions
 def clear_user_cache(user):
@@ -290,28 +291,48 @@ def budget_delete(request, pk):
 @login_required
 def budget_detail(request, pk):
     budget = get_object_or_404(Budget, pk=pk, user=request.user)
-    cache_key = f'budget_detail_{budget.id}'
-    context = cache.get(cache_key)
     
-    if context is None:
-        transactions = Transaction.objects.filter(
-            budget=budget
-        ).select_related('recurring_transaction').order_by('-date')
-        
-        period_info = budget.get_current_period_info()
-        historical_periods = budget.get_historical_periods(num_periods=52)
-        
-        context = {
-            'budget': budget,
-            'transactions': transactions,
-            'balance': period_info['balance'],
-            'spent': period_info['total_spent'],
-            'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
-            'historical_periods': historical_periods,
-        }
-        
-        # Cache for 5 minutes
-        cache.set(cache_key, context, 300)
+    # Get page numbers from request
+    transactions_page = request.GET.get('transactions_page', 1)
+    periods_page = request.GET.get('periods_page', 1)
+    
+    # Get all data
+    transactions = Transaction.objects.filter(
+        budget=budget
+    ).select_related('recurring_transaction').order_by('-date')
+    
+    period_info = budget.get_current_period_info()
+    all_historical_periods = budget.get_historical_periods(num_periods=52)
+    
+    # Paginate transactions - 10 per page
+    transactions_paginator = Paginator(transactions, 10)
+    try:
+        paginated_transactions = transactions_paginator.page(transactions_page)
+    except PageNotAnInteger:
+        paginated_transactions = transactions_paginator.page(1)
+    except EmptyPage:
+        paginated_transactions = transactions_paginator.page(transactions_paginator.num_pages)
+    
+    # Paginate historical periods - 10 per page
+    periods_paginator = Paginator(all_historical_periods, 10)
+    try:
+        paginated_periods = periods_paginator.page(periods_page)
+    except PageNotAnInteger:
+        paginated_periods = periods_paginator.page(1)
+    except EmptyPage:
+        paginated_periods = periods_paginator.page(periods_paginator.num_pages)
+    
+    context = {
+        'budget': budget,
+        'transactions': paginated_transactions,
+        'balance': period_info['balance'],
+        'spent': period_info['total_spent'],
+        'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
+        'historical_periods': paginated_periods,
+        'all_historical_periods': all_historical_periods,  # Used for chart data (not paginated)
+        'periods_page': periods_page,  # Pass current page for URL generation
+        'transactions_page': transactions_page,  # Pass current page for URL generation
+    }
     
     return render(request, 'budgetapp/budget_detail.html', context)
 
