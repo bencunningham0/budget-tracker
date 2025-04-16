@@ -310,6 +310,17 @@ class Budget(models.Model):
             
         return periods
 
+    def get_weekly_amount(self):
+        """Get the weekly equivalent of the budget amount."""
+        if self.frequency == 'weekly':
+            return self.amount
+        elif self.frequency == 'fortnightly':
+            return self.amount / Decimal('2')
+        elif self.frequency == 'monthly':
+            return self.amount * Decimal('12') / Decimal('52')
+        else:  # yearly
+            return self.amount / Decimal('52')
+
 class Income(models.Model):
     FREQUENCY_CHOICES = [
         ('weekly', 'Weekly'),
