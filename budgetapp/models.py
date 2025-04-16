@@ -613,3 +613,22 @@ def incometransaction_post_save(sender, instance, **kwargs):
 @receiver(post_delete, sender='budgetapp.IncomeTransaction')
 def incometransaction_post_delete(sender, instance, **kwargs):
     update_income_aggregates_async(instance.income)
+
+class BudgetPeriod(models.Model):
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='periods')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    budget_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    total_spent = models.DecimalField(max_digits=12, decimal_places=2)
+    difference = models.DecimalField(max_digits=12, decimal_places=2)
+    is_current = models.BooleanField(default=False)
+    is_over_budget = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['budget', 'start_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.budget.category} {self.start_date} - {self.end_date}"

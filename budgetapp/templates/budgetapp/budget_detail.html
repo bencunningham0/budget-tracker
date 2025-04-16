@@ -240,7 +240,7 @@
 {% endblock %}
 
 {% block scripts %}
-{% if historical_periods %}
+{% if all_historical_periods %}
 <script id="periods-data" type="application/json">
 [
 {% for period in all_historical_periods|slice:"-10:" %}

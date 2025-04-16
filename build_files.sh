@@ -12,7 +12,7 @@ python3 -m pip install -r requirements.txt
 # Run database migrations
 echo "Running database migrations..."
 python3 manage.py migrate --noinput
-python3 manage.py recompute_budget_history
+python3 manage.py migrate_budget_periods
 
 # Collect static files with optimization
 echo "Collecting static files..."

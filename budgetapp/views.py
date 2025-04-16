@@ -265,31 +265,18 @@ def budget_detail(request, pk):
     budget = get_object_or_404(Budget, pk=pk, user=request.user)
     transactions_page = request.GET.get('transactions_page', 1)
     periods_page = request.GET.get('periods_page', 1)
-    if 'transactions_page' in request.GET or 'periods_page' in request.GET:
-        cache.delete(f'budget_detail_{budget.id}')
-    cache_key = f'budget_detail_{budget.id}'
-    cached_data = cache.get(cache_key)
-    if cached_data is None:
-        transactions = Transaction.objects.filter(budget=budget).select_related('recurring_transaction').order_by('-date')
-        period_info = budget.get_current_period_info()
-        # Use precomputed historical_periods
-        all_historical_periods = budget.historical_periods or []
-        cached_data = {
-            'transactions': transactions,
-            'all_historical_periods': all_historical_periods,
-            'balance': period_info['balance'],
-            'spent': period_info['total_spent'],
-            'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
-        }
-        cache.set(cache_key, cached_data, 300)
-    transactions_paginator = Paginator(cached_data['transactions'], 10)
+    # Use BudgetPeriod queryset instead of JSONField
+    all_historical_periods = budget.periods.all().order_by('-start_date')
+    transactions = budget.transactions.select_related('recurring_transaction').order_by('-date')
+    period_info = budget.get_current_period_info()
+    transactions_paginator = Paginator(transactions, 10)
     try:
         paginated_transactions = transactions_paginator.page(transactions_page)
     except PageNotAnInteger:
         paginated_transactions = transactions_paginator.page(1)
     except EmptyPage:
         paginated_transactions = transactions_paginator.page(transactions_paginator.num_pages)
-    periods_paginator = Paginator(cached_data['all_historical_periods'], 10)
+    periods_paginator = Paginator(all_historical_periods, 10)
     try:
         paginated_periods = periods_paginator.page(periods_page)
     except PageNotAnInteger:
@@ -299,11 +286,11 @@ def budget_detail(request, pk):
     context = {
         'budget': budget,
         'transactions': paginated_transactions,
-        'balance': cached_data['balance'],
-        'spent': cached_data['spent'],
-        'percentage': cached_data['percentage'],
+        'balance': period_info['balance'],
+        'spent': period_info['total_spent'],
+        'percentage': (period_info['balance'] / period_info['budget_amount']) * Decimal('100') if period_info['budget_amount'] > 0 else Decimal('0'),
         'historical_periods': paginated_periods,
-        'all_historical_periods': cached_data['all_historical_periods'],
+        'all_historical_periods': all_historical_periods,
         'periods_page': int(periods_page),
         'transactions_page': int(transactions_page),
     }
