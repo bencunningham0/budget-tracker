@@ -124,8 +124,8 @@
                       <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
                     {% endif %}
                     {% for num in transactions.paginator.page_range %}
-                      {% if num == 1 or num == transactions.paginator.num_pages or (num >= transactions.number|add:'-2' and num <= transactions.number|add:'2') %}
-                        {% if num > 1 and num == transactions.number|add:'-2' and num != 2 %}
+                      {% if num == 1 or num == transactions.paginator.num_pages or num >= transactions.number|add:"-2" and num <= transactions.number|add:"2" %}
+                        {% if num > 1 and num == transactions.number|add:"-2" and num != 2 %}
                           <li class="page-item disabled"><span class="page-link">…</span></li>
                         {% endif %}
                         {% if transactions.number == num %}
@@ -133,7 +133,7 @@
                         {% else %}
                           <li class="page-item"><a class="page-link" href="?transactions_page={{ num }}{% if periods_page %}&periods_page={{ periods_page }}{% endif %}">{{ num }}</a></li>
                         {% endif %}
-                        {% if num < transactions.paginator.num_pages and num == transactions.number|add:'2' and num != transactions.paginator.num_pages|add:'-1' %}
+                        {% if num < transactions.paginator.num_pages and num == transactions.number|add:"2" and num != transactions.paginator.num_pages|add:"-1" %}
                           <li class="page-item disabled"><span class="page-link">…</span></li>
                         {% endif %}
                       {% endif %}
@@ -239,7 +239,7 @@
 {% if historical_periods %}
 <script id="periods-data" type="application/json">
 [
-{% for period in historical_periods.object_list|default:historical_periods %}
+{% for period in all_historical_periods %}
     {
         "label": "{{ period.start_date|date:'M d' }} - {{ period.end_date|date:'M d' }}",
         "budget": {{ period.budget_amount }},
