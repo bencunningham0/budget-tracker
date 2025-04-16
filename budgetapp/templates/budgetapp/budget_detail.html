@@ -31,6 +31,10 @@
                 <h6>Budget Amount: ${{ budget.amount|floatformat:2 }} ({{ budget.get_frequency_display }})</h6>
                 <h6>Current Balance: ${{ balance|floatformat:2 }}</h6>
                 <h6>Spent: ${{ spent|floatformat:2 }}</h6>
+                <div class="text-muted small mt-2">
+                    <div>Total Spent (All Time): ${{ budget.total_spent|floatformat:2 }}</div>
+                    <div>Avg Weekly Spent (All Time): ${{ budget.avg_weekly_spent|floatformat:2 }}</div>
+                </div>
                 
                 {% if budget.rollover %}
                 <span class="badge bg-info">Rollover Enabled</span>

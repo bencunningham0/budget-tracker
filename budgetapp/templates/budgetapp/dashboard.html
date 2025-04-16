@@ -56,6 +56,9 @@
                         <a href="{% url 'income_detail' income.id %}" class="text-decoration-none text-dark">{{ income.source }}</a>
                         <div>
                             <span class="badge bg-primary rounded-pill">${{ income.amount|floatformat:2 }} ({{ income.get_frequency_display }})</span>
+                            <span class="badge bg-info">Total: ${{ income.total_income|floatformat:2 }}</span>
+                            <span class="badge bg-secondary">30d Avg: ${{ income.avg_30d|floatformat:2 }}</span>
+                            <span class="badge bg-secondary">90d Avg: ${{ income.avg_90d|floatformat:2 }}</span>
                             {% if income.is_variable %}
                             <span class="badge bg-warning">Variable</span>
                             <a href="{% url 'income_transaction_create_for_income' income.id %}" class="btn btn-sm btn-outline-success ms-1">Record</a>
@@ -225,6 +228,8 @@
                 <div class="text-muted small">
                     <div>Weekly Budget: ${{ budget_item.weekly_amount|floatformat:2 }}</div>
                     <div>Weekly Average Spent: ${{ budget_item.weekly_spent|floatformat:2 }}</div>
+                    <div>Total Spent (All Time): ${{ budget_item.budget.total_spent|floatformat:2 }}</div>
+                    <div>Avg Weekly Spent (All Time): ${{ budget_item.budget.avg_weekly_spent|floatformat:2 }}</div>
                 </div>
                 
                 {% if budget_item.budget.rollover %}

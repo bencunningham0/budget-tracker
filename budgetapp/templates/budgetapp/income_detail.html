@@ -60,11 +60,19 @@
                 <ul class="list-group">
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Total Income Received
-                        <span class="badge bg-primary rounded-pill">${{ total_income|floatformat:2|intcomma }}</span>
+                        <span class="badge bg-primary rounded-pill">${{ income.total_income|floatformat:2|intcomma }}</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         Number of Transactions
                         <span class="badge bg-primary rounded-pill">{{ transaction_count }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Weekly Average (30 days)
+                        <span class="badge bg-secondary">${{ income.avg_30d|floatformat:2|intcomma }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Weekly Average (90 days)
+                        <span class="badge bg-secondary">${{ income.avg_90d|floatformat:2|intcomma }}</span>
                     </li>
                     {% if transaction_count > 0 %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">

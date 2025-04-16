@@ -21,10 +21,9 @@
         <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
             <h5 class="card-title mb-0">{{ data.income.source }}</h5>
             <div>
-                <span class="badge bg-light text-dark">Total: ${{ data.total|floatformat:2|intcomma }}</span>
-                {% if data.avg_per_period %}
-                <span class="badge bg-light text-dark">Avg/Month: ${{ data.avg_per_period|floatformat:2|intcomma }}</span>
-                {% endif %}
+                <span class="badge bg-light text-dark">Total: ${{ data.income.total_income|floatformat:2|intcomma }}</span>
+                <span class="badge bg-light text-dark">30d Avg: ${{ data.income.avg_30d|floatformat:2|intcomma }}</span>
+                <span class="badge bg-light text-dark">90d Avg: ${{ data.income.avg_90d|floatformat:2|intcomma }}</span>
                 {% if data.income.is_variable %}
                 <span class="badge bg-warning">Variable</span>
                 {% endif %}
