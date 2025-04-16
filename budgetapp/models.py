@@ -7,6 +7,7 @@ import json
 from datetime import timedelta, datetime, date
 from decimal import Decimal
 import pytz
+from threading import Thread
 
 # User Profile model to store additional user settings
 class UserProfile(models.Model):
@@ -571,6 +572,18 @@ def update_budget_aggregates(budget):
     budget.historical_periods = historical_periods
     budget.save(update_fields=["total_spent", "avg_weekly_spent", "historical_periods"])
 
+def update_budget_aggregates_async(budget):
+    Thread(target=update_budget_aggregates, args=(budget,)).start()
+
+# Signals for Transaction
+@receiver(post_save, sender='budgetapp.Transaction')
+def transaction_post_save(sender, instance, **kwargs):
+    update_budget_aggregates_async(instance.budget)
+
+@receiver(post_delete, sender='budgetapp.Transaction')
+def transaction_post_delete(sender, instance, **kwargs):
+    update_budget_aggregates_async(instance.budget)
+
 def update_income_aggregates(income):
     """Update precomputed fields for an Income instance."""
     transactions = income.income_transactions.all()
@@ -587,20 +600,14 @@ def update_income_aggregates(income):
     income.avg_90d = avg_90d
     income.save(update_fields=["total_income", "avg_30d", "avg_90d"])
 
-# Signals for Transaction
-@receiver(post_save, sender='budgetapp.Transaction')
-def transaction_post_save(sender, instance, **kwargs):
-    update_budget_aggregates(instance.budget)
-
-@receiver(post_delete, sender='budgetapp.Transaction')
-def transaction_post_delete(sender, instance, **kwargs):
-    update_budget_aggregates(instance.budget)
+def update_income_aggregates_async(income):
+    Thread(target=update_income_aggregates, args=(income,)).start()
 
 # Signals for IncomeTransaction
 @receiver(post_save, sender='budgetapp.IncomeTransaction')
 def incometransaction_post_save(sender, instance, **kwargs):
-    update_income_aggregates(instance.income)
+    update_income_aggregates_async(instance.income)
 
 @receiver(post_delete, sender='budgetapp.IncomeTransaction')
 def incometransaction_post_delete(sender, instance, **kwargs):
-    update_income_aggregates(instance.income)
+    update_income_aggregates_async(instance.income)
